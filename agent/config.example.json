@@ -29,7 +29,7 @@
       "id": "chatbz",
       "name": "ChatBz",
       "command": "start.bat",
-      "cwd": "%USERPROFILE%\\Documents\\Chat-Bz",
+      "cwd": "%USERPROFILE%\\Documents\\NEW CHATBZ\\ChatBz2",
       "health": "http://127.0.0.1:3100/api/health",
       "port": 3100,
       "openUrl": "http://{host}:3100",

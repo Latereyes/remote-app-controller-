@@ -6,7 +6,7 @@ Accendere e gestire da fuori casa il PC con la GPU: un telefono vecchio in casa 
 |---|---|---|
 | `agent/` | servizio sul PC: API con token per avviare, fermare e controllare le app | ✅ prima versione |
 | `boot/` | countdown di 30 s all'accensione e passaggio in modalità server | da fare |
-| `relay/` | relay Wake-on-LAN sul telefono vecchio (Termux) | da fare |
+| `relay/` | relay Wake-on-LAN sul telefono vecchio (Termux) | ✅ prima versione |
 | `android/` | app di gestione (Kotlin + Compose) | ✅ prima versione |
 
 ## Agent
@@ -24,7 +24,7 @@ Al primo avvio crea `agent/config.json` dall'esempio e stampa il **token** da in
 |---|---|---|
 | Ollama | `ollama serve` (se è già accesa dalla tray, viene solo rilevata) | — |
 | ComfyUI | `venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188` | `C:\AI\Stability Matrix\Packages\ComfyUI` |
-| ChatBz | `start.bat` | `%USERPROFILE%\Documents\Chat-Bz` |
+| ChatBz | `start.bat` | `%USERPROFILE%\Documents\NEW CHATBZ\ChatBz2` |
 | LocalAI | `start.bat` | `%USERPROFILE%\Documents\LocalAI` |
 
 Ogni app ha un URL `health`: se risponde, l'app è considerata accesa (anche se l'ha avviata qualcun altro). `requires` avvia prima le dipendenze (ChatBz e LocalAI accendono Ollama e ComfyUI). `stop.url` è la chiusura gentile; se manca o non basta, l'agent chiude il processo con tutti i figli.
@@ -66,3 +66,27 @@ Cosa fa:
 - spegne, riavvia o sospende il PC (con conferma).
 
 Al primo avvio chiede l'indirizzo dell'agent (es. `pc-casa:7070` con Tailscale) e il token, più indirizzo e token del relay. Lo stato si aggiorna ogni 5 secondi solo mentre l'app è aperta.
+
+## Relay Wake-on-LAN (telefono vecchio)
+
+Il pacchetto Wake-on-LAN è broadcast e non attraversa la VPN: lo manda il telefono vecchio, che sta in casa sulla stessa rete del PC. Serve Python su Termux, nessuna libreria esterna.
+
+1. Installa **Termux** e **Termux:Boot** da F-Droid (non dal Play Store) e **Tailscale**; apri Termux:Boot una volta.
+2. In Termux:
+   ```sh
+   pkg install -y python git
+   git clone -b claude/project-thread-gwlfoj https://github.com/Latereyes/remote-app-controller- ~/remote-app-controller
+   cd ~/remote-app-controller/relay && python wol_relay.py
+   ```
+   Il primo avvio crea `relay.json` e stampa il **token** per l'app. Ferma con Ctrl+C.
+3. In `relay.json` imposta `mac` (MAC della scheda di rete cablata del PC), `broadcast` (es. `192.168.1.255`) e `pc_host` (IP del PC in casa).
+4. Avvio automatico: `mkdir -p ~/.termux/boot && cp start-relay.sh ~/.termux/boot/`, poi riavvia il telefono.
+5. Nelle impostazioni Android togli Termux e Tailscale dall'ottimizzazione della batteria e tieni il telefono in carica.
+
+| Rotta | |
+|---|---|
+| `GET /health` | il relay è acceso (senza token) |
+| `POST /wake` | manda il magic packet (3 volte, porte 9 e 7) |
+| `GET /status` | il PC risponde sulla porta dell'agent? |
+
+Test: `cd relay && python3 -m unittest -v`.

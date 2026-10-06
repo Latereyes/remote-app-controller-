@@ -1,3 +1,6 @@
 node_modules/
 agent/config.json
 agent/logs/
+relay/relay.json
+relay/relay.log
+__pycache__/

@@ -23,7 +23,7 @@ Al primo avvio crea `agent/config.json` dall'esempio e stampa il **token** da in
 | App | Comando | Cartella (da verificare) |
 |---|---|---|
 | Ollama | `ollama serve` (se è già accesa dalla tray, viene solo rilevata) | — |
-| ComfyUI | `venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188` | `C:\AI\Stability Matrix\Packages\ComfyUI` |
+| ComfyUI | `venv\Scripts\python.exe main.py` + argomenti di Stability Matrix | `C:\IA\Packages\ComfyUI` |
 | ChatBz | `start.bat` | `%USERPROFILE%\Documents\NEW CHATBZ\ChatBz2` |
 | LocalAI | `start.bat` | `%USERPROFILE%\Documents\LocalAI` |
 

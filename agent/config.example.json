@@ -9,18 +9,31 @@
       "id": "ollama",
       "name": "Ollama",
       "command": "ollama",
-      "args": ["serve"],
+      "args": [
+        "serve"
+      ],
       "cwd": "%USERPROFILE%",
       "health": "http://127.0.0.1:11434/api/version",
       "port": 11434,
-      "processNames": ["ollama app.exe", "ollama.exe"]
+      "processNames": [
+        "ollama app.exe",
+        "ollama.exe"
+      ]
     },
     {
       "id": "comfy",
       "name": "ComfyUI",
       "command": "venv\\Scripts\\python.exe",
-      "args": ["main.py", "--listen", "127.0.0.1", "--port", "8188"],
-      "cwd": "C:\\AI\\Stability Matrix\\Packages\\ComfyUI",
+      "args": [
+        "main.py",
+        "--preview-method",
+        "auto",
+        "--use-pytorch-cross-attention",
+        "--listen",
+        "--enable-cors-header",
+        "--enable-manager"
+      ],
+      "cwd": "C:\\IA\\Packages\\ComfyUI",
       "health": "http://127.0.0.1:8188/system_stats",
       "port": 8188,
       "startTimeoutSec": 180
@@ -33,8 +46,13 @@
       "health": "http://127.0.0.1:3100/api/health",
       "port": 3100,
       "openUrl": "http://{host}:3100",
-      "requires": ["ollama", "comfy"],
-      "stop": { "url": "http://127.0.0.1:3100/api/control/shutdown" }
+      "requires": [
+        "ollama",
+        "comfy"
+      ],
+      "stop": {
+        "url": "http://127.0.0.1:3100/api/control/shutdown"
+      }
     },
     {
       "id": "localai",
@@ -44,12 +62,29 @@
       "health": "http://127.0.0.1:3000/",
       "port": 3000,
       "openUrl": "http://{host}:3000",
-      "requires": ["ollama", "comfy"]
+      "requires": [
+        "ollama",
+        "comfy"
+      ]
     }
   ],
   "power": {
-    "shutdown": ["shutdown", "/s", "/t", "5"],
-    "restart": ["shutdown", "/r", "/t", "5"],
-    "sleep": ["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"]
+    "shutdown": [
+      "shutdown",
+      "/s",
+      "/t",
+      "5"
+    ],
+    "restart": [
+      "shutdown",
+      "/r",
+      "/t",
+      "5"
+    ],
+    "sleep": [
+      "rundll32.exe",
+      "powrprof.dll,SetSuspendState",
+      "0,1,0"
+    ]
   }
 }

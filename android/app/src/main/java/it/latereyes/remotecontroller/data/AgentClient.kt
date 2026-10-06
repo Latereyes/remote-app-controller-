@@ -48,9 +48,11 @@ internal suspend fun request(
 /** Client dell'agent sul PC (vedi agent/README nella repository). */
 class AgentClient(private val baseUrl: String, private val token: String) {
 
-    suspend fun health(): Boolean = runCatching {
-        JSONObject(request(baseUrl, "/api/health", null, timeoutMs = 3000)).optBoolean("ok")
-    }.getOrDefault(false)
+    /** null se l'agent non risponde, altrimenti la modalità scelta all'accensione ("server", "xbox" o ""). */
+    suspend fun health(): String? = runCatching {
+        val o = JSONObject(request(baseUrl, "/api/health", null, timeoutMs = 3000))
+        if (o.optBoolean("ok")) (if (o.isNull("mode")) "" else o.optString("mode")) else null
+    }.getOrNull()
 
     suspend fun apps(): List<AppStatus> = AppStatus.listFromJson(request(baseUrl, "/api/apps", token))
 

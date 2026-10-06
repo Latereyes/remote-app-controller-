@@ -1,0 +1,29 @@
+name: boot
+
+on:
+  push:
+    paths: ['boot/**', '.github/workflows/boot.yml']
+  pull_request:
+    paths: ['boot/**', '.github/workflows/boot.yml']
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sintassi degli script
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem boot -Filter *.ps1 | ForEach-Object {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+            if ($errors) { $failed = $true; $errors | ForEach-Object { Write-Output "$($_.Extent.File):$($_.Extent.StartLineNumber) $($_.Message)" } }
+          }
+          if ($failed) { exit 1 }
+      - name: Countdown senza nessuno al PC → modalità server
+        shell: powershell
+        run: |
+          $out = powershell -NoProfile -ExecutionPolicy Bypass -File boot\countdown.ps1 -Seconds 2 -NoGui -DryRun | Out-String
+          Write-Output $out
+          if ($out -notmatch 'server') { exit 1 }

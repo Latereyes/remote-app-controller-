@@ -5,7 +5,7 @@ Accendere e gestire da fuori casa il PC con la GPU: un telefono vecchio in casa 
 | Cartella | Cosa fa | Stato |
 |---|---|---|
 | `agent/` | servizio sul PC: API con token per avviare, fermare e controllare le app | ✅ prima versione |
-| `boot/` | countdown di 30 s all'accensione e passaggio in modalità server | da fare |
+| `boot/` | countdown di 30 s all'accensione e passaggio in modalità server | ✅ prima versione |
 | `relay/` | relay Wake-on-LAN sul telefono vecchio (Termux) | ✅ prima versione |
 | `android/` | app di gestione (Kotlin + Compose) | ✅ prima versione |
 
@@ -90,3 +90,19 @@ Il pacchetto Wake-on-LAN è broadcast e non attraversa la VPN: lo manda il telef
 | `GET /status` | il PC risponde sulla porta dell'agent? |
 
 Test: `cd relay && python3 -m unittest -v`.
+
+## Countdown e modalità server (`boot/`)
+
+All'accesso automatico (modalità Xbox) compare in alto una finestra con un countdown di 30 secondi. Mouse, tastiera o controller Xbox lo interrompono e il PC resta in modalità Xbox. Se nessuno tocca niente, il PC passa in modalità server: si assicura che l'agent sia acceso e avvia le app in `serverApps` (di base Ollama e ComfyUI). La modalità scelta finisce in `boot/mode.txt`, e l'app la mostra.
+
+Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox).
+
+Installazione (PowerShell nella cartella `boot`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1            # registra le attività all'accesso
+powershell -ExecutionPolicy Bypass -File countdown.ps1 -Seconds 10   # prova subito
+powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall # rimuove tutto
+```
+
+Il registro è in `boot/boot.log`, quello dell'agent in `agent/agent.log`.

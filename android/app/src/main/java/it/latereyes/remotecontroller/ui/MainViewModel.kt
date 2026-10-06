@@ -23,6 +23,7 @@ data class LogsView(val appId: String, val appName: String, val lines: List<Stri
 data class UiState(
     val settings: Settings = Settings(),
     val pc: PcState = PcState.UNKNOWN,
+    val mode: String = "",               // "server" | "xbox" | "" (countdown non ancora eseguito)
     val apps: List<AppStatus> = emptyList(),
     val system: SystemInfo? = null,
     val busy: Set<String> = emptySet(),   // id delle app (o "gpu", "wake", "power") con un comando in corso
@@ -62,7 +63,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val s = _state.value.settings
         if (!s.isConfigured) return
         val client = agent
-        if (!client.health()) {
+        val mode = client.health()
+        if (mode == null) {
             val pc = if (System.currentTimeMillis() < wakingUntil) PcState.WAKING else PcState.OFFLINE
             _state.update { it.copy(pc = pc, apps = emptyList(), system = null, lastUpdate = System.currentTimeMillis()) }
             return
@@ -71,7 +73,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val apps = client.apps()
             val system = runCatching { client.system() }.getOrNull()
-            _state.update { it.copy(pc = PcState.ONLINE, apps = apps, system = system ?: it.system, lastUpdate = System.currentTimeMillis()) }
+            _state.update { it.copy(pc = PcState.ONLINE, mode = mode, apps = apps, system = system ?: it.system, lastUpdate = System.currentTimeMillis()) }
         } catch (e: Exception) {
             _state.update { it.copy(pc = PcState.ONLINE, message = e.message) }
         }

@@ -14,7 +14,7 @@ export function tokenMatches(header, token) {
  * Server HTTP dell'agent. Tutte le rotte tranne /api/health richiedono `Authorization: Bearer <token>`.
  * Dopo 10 tentativi sbagliati in un minuto lo stesso indirizzo riceve 429.
  */
-export function createServer({ config, apps, system, log = console.log }) {
+export function createServer({ config, apps, system, getMode = () => null, log = console.log }) {
   const failures = new Map();
 
   const routes = [
@@ -40,7 +40,7 @@ export function createServer({ config, apps, system, log = console.log }) {
     const url = new URL(req.url, 'http://agent');
     try {
       if (req.method === 'GET' && url.pathname === '/api/health') {
-        return send(200, { ok: true, service: 'remote-app-controller', version: VERSION });
+        return send(200, { ok: true, service: 'remote-app-controller', version: VERSION, mode: getMode() });
       }
 
       const ip = req.socket.remoteAddress;

@@ -1,0 +1,5 @@
+{
+  "seconds": 30,
+  "serverApps": ["ollama", "comfy"],
+  "agentAlways": true
+}

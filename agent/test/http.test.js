@@ -19,7 +19,7 @@ before(async () => {
     freeGpu: async () => ({ ollama: [], comfy: true }),
     power: (a) => { calls.push(['power', a]); return { action: a }; },
   };
-  server = createServer({ config: { token }, apps, system, log: () => {} });
+  server = createServer({ config: { token }, apps, system, getMode: () => 'server', log: () => {} });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -36,7 +36,9 @@ test('tokenMatches', () => {
 });
 
 test('health è pubblico, il resto vuole il token', async () => {
-  assert.equal((await call('/api/health', { auth: null })).status, 200);
+  const health = await call('/api/health', { auth: null });
+  assert.equal(health.status, 200);
+  assert.equal((await health.json()).mode, 'server');
   assert.equal((await call('/api/apps', { auth: null })).status, 401);
   assert.equal((await call('/api/apps', { auth: 'sbagliato' })).status, 401);
   const res = await call('/api/apps');

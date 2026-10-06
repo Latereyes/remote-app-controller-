@@ -131,7 +131,11 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val (color, text) = when (state.pc) {
-                PcState.ONLINE -> Green to "Acceso, modalità server"
+                PcState.ONLINE -> Green to when (state.mode) {
+                    "server" -> "Acceso, modalità server"
+                    "xbox" -> "Acceso, modalità Xbox"
+                    else -> "Acceso"
+                }
                 PcState.WAKING -> Amber to "In accensione…"
                 PcState.OFFLINE -> Grey to "Spento o non raggiungibile"
                 PcState.UNKNOWN -> Grey to "Controllo…"

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +20,10 @@ try {
 
 const apps = new AppManager(config.apps);
 const system = createSystem(config);
-const server = createServer({ config, apps, system });
+// Modalità scelta dal countdown all'accensione (boot/mode.txt): "server", "xbox" o null
+const modeFile = path.join(root, '..', 'boot', 'mode.txt');
+const getMode = () => { try { return fs.readFileSync(modeFile, 'utf8').trim() || null; } catch { return null; } };
+const server = createServer({ config, apps, system, getMode });
 
 server.listen(config.port, config.host, () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i?.family === 'IPv4' && !i.internal).map((i) => i.address);

@@ -4,3 +4,6 @@ agent/logs/
 relay/relay.json
 relay/relay.log
 __pycache__/
+boot/boot.log
+boot/mode.txt
+agent/*.log

@@ -98,8 +98,11 @@ $startTick = [UserInput]::LastInputTick()
 [void][UserInput]::GamepadActivity()   # prima lettura di riferimento
 $deadline = (Get-Date).AddSeconds($cfg.seconds)
 
+$script:activity = ''
 function Test-UserPresent {
-  return ([UserInput]::LastInputTick() -ne $startTick) -or [UserInput]::GamepadActivity()
+  if ([UserInput]::LastInputTick() -ne $startTick) { $script:activity = 'mouse o tastiera'; return $true }
+  if ([UserInput]::GamepadActivity()) { $script:activity = 'controller'; return $true }
+  return $false
 }
 
 function Get-AgentConfig {
@@ -141,7 +144,7 @@ function Enter-ServerMode {
 }
 
 function Enter-XboxMode {
-  Write-Log 'Attività rilevata: resto in modalità Xbox'
+  Write-Log "Attività rilevata ($script:activity): resto in modalità Xbox"
   Set-Mode 'xbox'
 }
 

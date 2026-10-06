@@ -7,7 +7,7 @@ Accendere e gestire da fuori casa il PC con la GPU: un telefono vecchio in casa 
 | `agent/` | servizio sul PC: API con token per avviare, fermare e controllare le app | ✅ prima versione |
 | `boot/` | countdown di 30 s all'accensione e passaggio in modalità server | da fare |
 | `relay/` | relay Wake-on-LAN sul telefono vecchio (Termux) | da fare |
-| `android/` | app di gestione | da fare |
+| `android/` | app di gestione (Kotlin + Compose) | ✅ prima versione |
 
 ## Agent
 
@@ -54,3 +54,15 @@ cd agent && npm test
 ```
 
 I test girano su Linux e Windows in GitHub Actions, con un'app finta al posto di quelle vere.
+
+## App Android
+
+L'APK si compila in GitHub Actions a ogni modifica di `android/` e finisce nella release **android-latest** (pagina *Releases* della repository): dal telefono si scarica `PC-Remoto.apk` e si installa consentendo le fonti sconosciute. Gli aggiornamenti si installano sopra la versione precedente, perché ogni build è firmata con la stessa chiave (`android/app/signing.keystore`, chiave per uso personale, non da Play Store).
+
+Cosa fa:
+- mostra se il PC è acceso, spento o in accensione, e lo accende tramite il relay del telefono di casa (`POST /wake`);
+- elenca Ollama, ComfyUI, ChatBz e LocalAI con il loro stato, li avvia e li ferma, mostra i log e apre ChatBz o LocalAI nel browser;
+- mostra VRAM, carico e temperatura della GPU e i modelli Ollama in memoria, con il pulsante "Libera VRAM";
+- spegne, riavvia o sospende il PC (con conferma).
+
+Al primo avvio chiede l'indirizzo dell'agent (es. `pc-casa:7070` con Tailscale) e il token, più indirizzo e token del relay. Lo stato si aggiorna ogni 5 secondi solo mentre l'app è aperta.

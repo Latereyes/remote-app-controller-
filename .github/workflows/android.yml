@@ -1,0 +1,45 @@
+name: android
+
+on:
+  push:
+    paths: ['android/**', '.github/workflows/android.yml']
+  pull_request:
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+      - run: cp app/build/outputs/apk/release/app-release.apk PC-Remoto.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PC-Remoto-apk
+          path: android/PC-Remoto.apk
+      # APK sempre aggiornato in una release fissa: dal telefono basta aprire la pagina e scaricarlo
+      - name: Pubblica nella release "android-latest"
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: App Android (ultima build)
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: |
+            APK compilato dal commit ${{ github.sha }} (build ${{ github.run_number }}).
+            Scarica PC-Remoto.apk dal telefono e installalo (consenti l'installazione da fonti sconosciute).
+          files: android/PC-Remoto.apk

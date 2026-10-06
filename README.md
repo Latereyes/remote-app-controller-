@@ -101,8 +101,10 @@ Installazione (PowerShell nella cartella `boot`):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1            # registra le attività all'accesso
-powershell -ExecutionPolicy Bypass -File countdown.ps1 -Seconds 10   # prova subito
+powershell -ExecutionPolicy Bypass -File countdown.ps1 -Seconds 10 -Force   # prova subito
 powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall # rimuove tutto
 ```
 
 Il registro è in `boot/boot.log`, quello dell'agent in `agent/agent.log`.
+
+In modalità Xbox le attività "all'accesso" possono non partire. In quel caso basta richiamare `boot\avvia-tutto.bat` da uno script che parte con la modalità Xbox, per esempio aggiungendo `call "C:\AI\remote-app-controller\boot\avvia-tutto.bat"`. Si può chiamare più volte: il countdown decide una sola volta per accensione (`countdown.ps1 -Force` per riprovarlo a mano).

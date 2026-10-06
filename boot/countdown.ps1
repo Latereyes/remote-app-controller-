@@ -7,11 +7,13 @@
   -Seconds N  sovrascrive boot.json
   -NoGui      niente finestra (per i test)
   -DryRun     non avvia niente e non scrive file: stampa solo la decisione
+  -Force      riparte anche se dopo l'ultima accensione la modalità è già stata decisa
 #>
 param(
   [int]$Seconds = 0,
   [switch]$NoGui,
-  [switch]$DryRun
+  [switch]$DryRun,
+  [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +32,16 @@ function Write-Log([string]$msg) {
   $line = '{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg
   Write-Output $line
   if (-not $DryRun) { Add-Content -Path $logFile -Value $line -Encoding UTF8 }
+}
+
+# Il countdown può partire da più punti (accesso, avvio della modalità Xbox): una volta per accensione basta
+$modeFile = Join-Path $here 'mode.txt'
+if (-not $Force -and -not $DryRun -and (Test-Path $modeFile)) {
+  $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+  if ((Get-Item $modeFile).LastWriteTime -gt $boot) {
+    Write-Output 'Modalità già decisa dopo l''ultima accensione: esco'
+    exit 0
+  }
 }
 
 Add-Type -TypeDefinition @'
@@ -101,7 +113,7 @@ function Test-Agent([int]$port) {
 }
 
 function Set-Mode([string]$mode) {
-  if (-not $DryRun) { Set-Content -Path (Join-Path $here 'mode.txt') -Value $mode -Encoding ASCII }
+  if (-not $DryRun) { Set-Content -Path $modeFile -Value $mode -Encoding ASCII }
 }
 
 function Enter-ServerMode {

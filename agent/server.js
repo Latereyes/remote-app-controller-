@@ -6,6 +6,7 @@ import { loadConfig } from './src/config.js';
 import { AppManager } from './src/apps.js';
 import { createSystem } from './src/system.js';
 import { createServer } from './src/http.js';
+import { GpuArbiter } from './src/gpu.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configFile = process.env.AGENT_CONFIG ? path.resolve(process.env.AGENT_CONFIG) : path.join(root, 'config.json');
@@ -23,7 +24,16 @@ const system = createSystem(config);
 // Modalità scelta dal countdown all'accensione (boot/mode.txt): "server", "xbox" o null
 const modeFile = path.join(root, '..', 'boot', 'mode.txt');
 const getMode = () => { try { return fs.readFileSync(modeFile, 'utf8').trim() || null; } catch { return null; } };
-const server = createServer({ config, apps, system, getMode });
+// Arbitro della GPU per ChatBz, LocalAI e l'app Android: un lavoro alla volta, l'altro motore scaricato
+const gpu = new GpuArbiter({ unload: { ollama: () => system.unloadOllama(), comfy: () => system.freeComfy() } });
+setInterval(() => gpu.sweep(), 5000).unref();
+let lastGpuLog = null;
+gpu.on('state', (s) => {
+  const key = s.active && s.active.phase === 'granted' ? `${s.active.app}: ${s.active.label}` : null;
+  if (key && key !== lastGpuLog) console.log(`  [gpu] ${key} (${s.owner || '-'}${s.queue.length ? `, ${s.queue.length} in coda` : ''})`);
+  lastGpuLog = key;
+});
+const server = createServer({ config, apps, system, gpu, getMode });
 
 server.listen(config.port, config.host, () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i?.family === 'IPv4' && !i.internal).map((i) => i.address);

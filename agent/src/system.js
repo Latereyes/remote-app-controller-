@@ -20,7 +20,7 @@ async function getJson(url, init = {}) {
 }
 
 /** Informazioni sul PC, VRAM e alimentazione. `exec` è sostituibile nei test. */
-export function createSystem(config, { exec = execFileP, delayMs = 1500 } = {}) {
+export function createSystem(config, { exec = execFileP, delayMs = 1500, pollMs = 500 } = {}) {
   async function gpu() {
     try {
       const { stdout } = await exec('nvidia-smi', ['--query-gpu=name,memory.used,memory.total,temperature.gpu,utilization.gpu', '--format=csv,noheader,nounits']);
@@ -54,20 +54,26 @@ export function createSystem(config, { exec = execFileP, delayMs = 1500 } = {}) 
     };
   }
 
-  /** Libera la VRAM: scarica i modelli di Ollama e chiede a ComfyUI di liberare la memoria. */
-  async function freeGpu() {
-    const result = { ollama: [], comfy: false };
-    for (const m of (await ollamaLoaded()) || []) {
-      try {
-        await getJson(`${config.ollamaUrl}/api/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: m.name, keep_alive: 0 }),
-          timeout: 15000,
-        });
-        result.ollama.push(m.name);
-      } catch {}
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /** Scarica i modelli di Ollama e aspetta che escano davvero dalla VRAM. Restituisce i nomi scaricati. */
+  async function unloadOllama({ timeoutMs = 15000 } = {}) {
+    const names = ((await ollamaLoaded()) || []).map((m) => m.name);
+    for (const model of names) {
+      await getJson(`${config.ollamaUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, keep_alive: 0 }),
+        timeout: 15000,
+      }).catch(() => {});
     }
+    const t0 = Date.now();
+    while (names.length && Date.now() - t0 < timeoutMs && ((await ollamaLoaded()) || []).length) await pause(pollMs);
+    return names;
+  }
+
+  /** Chiede a ComfyUI di liberare la VRAM e aspetta che sia libera per l'80%. false se ComfyUI è spento. */
+  async function freeComfy({ timeoutMs = 12000 } = {}) {
     try {
       const res = await fetch(`${config.comfyUrl}/free`, {
         method: 'POST',
@@ -76,9 +82,19 @@ export function createSystem(config, { exec = execFileP, delayMs = 1500 } = {}) 
         signal: AbortSignal.timeout(10000),
       });
       await res.body?.cancel();
-      result.comfy = res.ok;
-    } catch {}
-    return result;
+      if (!res.ok) return false;
+    } catch {
+      return false;
+    }
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      try {
+        const dev = (await getJson(`${config.comfyUrl}/system_stats`)).devices?.[0];
+        if (dev && dev.vram_free / dev.vram_total > 0.8) break;
+      } catch { break; }
+      await pause(pollMs);
+    }
+    return true;
   }
 
   /** Spegne, riavvia o sospende il PC poco dopo aver risposto, così l'app riceve la conferma. */
@@ -89,5 +105,5 @@ export function createSystem(config, { exec = execFileP, delayMs = 1500 } = {}) 
     return { action, inMs: delayMs };
   }
 
-  return { info, gpu, ollamaLoaded, freeGpu, power };
+  return { info, gpu, ollamaLoaded, unloadOllama, freeComfy, power };
 }

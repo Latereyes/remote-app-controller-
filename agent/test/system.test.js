@@ -25,6 +25,8 @@ test('gpu() restituisce null se nvidia-smi manca', async () => {
   const sys = createSystem({ ollamaUrl: 'http://127.0.0.1:1', comfyUrl: 'http://127.0.0.1:1', power: {} }, { exec: async () => { throw new Error('ENOENT'); } });
   assert.equal(await sys.gpu(), null);
   assert.equal(await sys.ollamaLoaded(), null);
+  assert.deepEqual(await sys.unloadOllama(), []);
+  assert.equal(await sys.freeComfy(), false);
 });
 
 test('power esegue il comando configurato dopo la risposta', async () => {

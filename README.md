@@ -42,10 +42,19 @@ Tutte le rotte tranne `/api/health` vogliono `Authorization: Bearer <token>`. Do
 | `POST /api/apps/:id/stop` | chiusura gentile, poi forzata |
 | `GET /api/apps/:id/logs?lines=200` | ultime righe di output (solo app avviate dall'agent) |
 | `GET /api/system` | PC, RAM, GPU (`nvidia-smi`) e modelli caricati in Ollama |
-| `POST /api/gpu/free` | scarica i modelli di Ollama e libera la VRAM di ComfyUI |
+| `GET /api/gpu` | arbitro della GPU: chi la sta usando (app, lavoro), cosa c'è in coda, motore caricato |
+| `POST /api/gpu/free` | al suo turno scarica i modelli di Ollama e libera la VRAM di ComfyUI |
+| `POST /api/gpu/acquire` | chiede la GPU: `{ who: "ollama"\|"comfy"\|"none", app, label, priority: "high"\|"normal"\|"low" }`, poi `{ ticket }` finché non risponde `granted` |
+| `POST /api/gpu/leases/:id/renew` · `release` | rinnova (entro 60 s) o restituisce il permesso; `release` su un biglietto in coda vi rinuncia |
 | `POST /api/system/shutdown` · `restart` · `sleep` | alimentazione (parte dopo 1,5 s) |
 
 Nota: `sleep` usa `SetSuspendState`, che iberna se l'ibernazione è attiva (`powercfg /h off` per avere la sospensione vera).
+
+### Arbitro della GPU
+
+Ollama e ComfyUI non stanno insieme nei 16 GB della scheda, e ChatBz e LocalAI li usano entrambi. L'agent fa da arbitro unico: ogni lavoro delle due app chiede il permesso, ne lavora **uno alla volta**, e quando tocca all'altro motore l'agent scarica i modelli di Ollama o svuota ComfyUI (solo quando serve: due immagini di fila non ricaricano niente). In coda passa prima la priorità (`high` la chat, `normal` le generazioni, `low` i lavori in sottofondo come il social di ChatBz), poi l'ordine di arrivo. Un lavoro già partito non viene interrotto.
+
+Le rotte `/api/gpu*` funzionano anche **senza token, ma solo dal PC stesso** (127.0.0.1): ChatBz e LocalAI non vanno configurati. Un'app che si blocca perde il permesso dopo 60 s senza rinnovi; se l'agent è spento, le app tornano al loro arbitro interno. `/api/system` include lo stato dell'arbitro in `arbiter`.
 
 ### Test
 

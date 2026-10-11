@@ -23,12 +23,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,10 +68,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
+fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit, onUsers: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var confirmPower by remember { mutableStateOf<String?>(null) }
+    var menu by remember { mutableStateOf(false) }
+    val admin = state.isAdmin
 
     LaunchedEffect(state.message) {
         state.message?.let { snackbar.showSnackbar(it); vm.dismissMessage() }
@@ -79,7 +85,15 @@ fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
                 title = { Text("PC Remoto") },
                 actions = {
                     IconButton(onClick = { scope.launch { vm.refresh() } }) { Icon(Icons.Default.Refresh, "Aggiorna") }
-                    IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Impostazioni") }
+                    if (admin) IconButton(onClick = onUsers) { Icon(Icons.Default.Person, "Utenti") }
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Altro") }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text("Impostazioni") }, leadingIcon = { Icon(Icons.Default.Settings, null) },
+                                onClick = { menu = false; onSettings() })
+                            DropdownMenuItem(text = { Text("Esci (${state.user?.name ?: ""})") }, onClick = { menu = false; vm.logout() })
+                        }
+                    }
                 },
             )
         },
@@ -92,10 +106,15 @@ fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit) {
         ) {
             item { PcCard(state, vm, onPower = { confirmPower = it }) }
             if (state.pc == PcState.ONLINE) {
-                state.system?.let { sys -> item { GpuCard(sys, busy = "gpu" in state.busy, onFree = vm::freeGpu) } }
-                item { Text("App", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp)) }
+                // GPU, RAM, log e alimentazione solo per l'amministratore: gli altri vedono le loro app e basta
+                if (admin) state.system?.let { sys -> item { GpuCard(sys, busy = "gpu" in state.busy, onFree = vm::freeGpu) } }
+                item { Text(if (admin) "App" else "Le tue app", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp)) }
+                if (!admin && state.apps.isEmpty()) {
+                    item { Text("Nessuna app abilitata: chiedi ad Andrea.", style = MaterialTheme.typography.bodySmall) }
+                }
                 items(state.apps, key = { it.id }) { app ->
-                    AppCard(app, agentUrl = state.settings.agentUrl, busy = app.id in state.busy, vm = vm)
+                    if (admin) AppCard(app, agentUrl = state.settings.agentUrl, busy = app.id in state.busy, vm = vm)
+                    else UserAppCard(app, agentUrl = state.settings.agentUrl, busy = app.id in state.busy, vm = vm)
                 }
             }
         }
@@ -122,7 +141,7 @@ private fun powerLabel(action: String) = when (action) {
 }
 
 @Composable
-private fun Dot(color: Color) {
+internal fun Dot(color: Color) {
     Box(Modifier.size(10.dp).clip(CircleShape).background(color))
 }
 
@@ -130,10 +149,12 @@ private fun Dot(color: Color) {
 private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val admin = state.isAdmin
             val (color, text) = when (state.pc) {
-                PcState.ONLINE -> Green to when (state.mode) {
-                    "server" -> "Acceso, modalità server"
-                    "xbox" -> "Acceso, modalità Xbox"
+                PcState.ONLINE -> Green to when {
+                    !admin -> "Acceso"
+                    state.mode == "server" -> "Acceso, modalità server"
+                    state.mode == "xbox" -> "Acceso, modalità Xbox"
                     else -> "Acceso"
                 }
                 PcState.WAKING -> Amber to "In accensione…"
@@ -145,7 +166,7 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
                 Spacer(Modifier.width(8.dp))
                 Text(text, style = MaterialTheme.typography.titleMedium)
             }
-            state.system?.takeIf { state.pc == PcState.ONLINE }?.let { sys ->
+            state.system?.takeIf { admin && state.pc == PcState.ONLINE }?.let { sys ->
                 Text("${sys.hostname} · acceso da ${formatUptime(sys.uptimeSec)} · RAM libera ${sys.memFreeMiB / 1024} di ${sys.memTotalMiB / 1024} GB",
                     style = MaterialTheme.typography.bodySmall)
             }
@@ -162,7 +183,7 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
                             style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                PcState.ONLINE -> {
+                PcState.ONLINE -> if (admin) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val off = "power" in state.busy
                         OutlinedButton(onClick = { onPower("shutdown") }, enabled = !off) { Text("Spegni") }
@@ -240,6 +261,30 @@ private fun AppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainVie
                     }) { Text("Apri") }
                 }
                 if (app.managed) TextButton(onClick = { vm.showLogs(app) }) { Text("Log") }
+            }
+        }
+    }
+}
+
+/** App per chi non è amministratore: solo se è pronta, il pulsante per avviarla e quello per aprirla. */
+@Composable
+private fun UserAppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainViewModel) {
+    val context = LocalContext.current
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Dot(when { app.isRunning -> Green; app.isBusy || busy -> Amber; else -> Grey })
+                Spacer(Modifier.width(8.dp))
+                Text(app.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(when { app.isRunning -> "pronta"; app.isBusy || busy -> "si sta avviando…"; else -> "spenta" },
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            when {
+                busy || app.isBusy -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                app.isRunning -> if (app.openUrl != null) Button(onClick = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(resolveOpenUrl(app.openUrl, agentUrl))))
+                }) { Text("Apri") }
+                else -> Button(onClick = { vm.start(app) }) { Text("Avvia") }
             }
         }
     }

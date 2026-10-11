@@ -73,14 +73,13 @@ export class GpuArbiter extends EventEmitter {
     return t;
   }
 
-  /** Risposta per l'app: permesso concesso oppure posizione in coda e chi sta usando la GPU. */
+  /**
+   * Risposta per l'app: permesso concesso oppure posizione in coda.
+   * Chi aspetta non sa chi sta usando la GPU né per cosa: le app mostrano solo "GPU occupata, attendere...".
+   */
   #status(t) {
     if (t.phase === 'granted') return { status: 'granted', lease: t.id, owner: this.owner, expiresInMs: t.expiresAt - this.#opts.now() };
-    return {
-      status: 'waiting', ticket: t.id,
-      position: t === this.active ? 0 : this.#queue.indexOf(t) + 1,
-      active: this.#view(this.active),
-    };
+    return { status: 'waiting', ticket: t.id, position: t === this.active ? 0 : this.#queue.indexOf(t) + 1 };
   }
 
   /** Attende fino a `ms` che il biglietto ottenga la GPU (attesa lunga: l'app richiama finché non tocca a lei). */

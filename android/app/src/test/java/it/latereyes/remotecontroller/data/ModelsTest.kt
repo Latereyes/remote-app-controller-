@@ -61,6 +61,38 @@ class ModelsTest {
     fun agentErrorMessage() {
         assertEquals("app sconosciuta: x", errorMessage("""{"error":"app sconosciuta: x"}"""))
         assertNull(errorMessage("<html>"))
-        assertFalse(Settings(agentUrl = "x").isConfigured)
+        assertFalse(Settings().isConfigured)
+        assertTrue(Settings(agentUrl = "x").isConfigured)   // il token non serve più: si entra con nome e password
+        assertFalse(Settings(agentUrl = "x").isLoggedIn)
+    }
+
+    @Test
+    fun appsForNormalUserWithoutTechnicalData() {
+        val apps = AppStatus.listFromJson("""[{"id":"chatbz","name":"ChatBz","state":"running","openUrl":"http://{host}:3100"}]""")
+        assertTrue(apps[0].isRunning)
+        assertFalse(apps[0].managed)
+        assertNull(apps[0].port)
+        assertTrue(apps[0].requires.isEmpty())
+    }
+
+    @Test
+    fun loginAndUsers() {
+        val login = Login.fromJson(
+            """{"token":"abc","user":{"name":"Andrea","role":"admin","apps":null,"relay":{"url":"http://relay:8765","token":"r"}}}"""
+        )
+        assertEquals("abc", login.token)
+        assertTrue(login.user.isAdmin)
+        assertNull(login.user.apps)
+        assertEquals("http://relay:8765", login.user.relayUrl)
+
+        val user = Me.fromJson(org.json.JSONObject("""{"name":"Giulia","role":"user","apps":["chatbz"],"relay":null}"""))
+        assertFalse(user.isAdmin)
+        assertEquals(listOf("chatbz"), user.apps)
+        assertNull(user.relayUrl)
+
+        val users = UserInfo.listFromJson("""[{"name":"Andrea","role":"admin","apps":null,"hasPassword":true},{"name":"Giulia","role":"user","apps":["chatbz"]}]""")
+        assertTrue(users[0].isAdmin)
+        assertTrue(users[0].apps.isEmpty())
+        assertEquals(listOf("chatbz"), users[1].apps)
     }
 }

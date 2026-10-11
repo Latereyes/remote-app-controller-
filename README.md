@@ -29,16 +29,32 @@ Al primo avvio crea `agent/config.json` dall'esempio e stampa il **token** da in
 
 Ogni app ha un URL `health`: se risponde, l'app è considerata accesa (anche se l'ha avviata qualcun altro). `requires` avvia prima le dipendenze (ChatBz e LocalAI accendono Ollama e ComfyUI). `stop.url` è la chiusura gentile; se manca o non basta, l'agent chiude il processo con tutti i figli.
 
+### Utenti e accesso
+
+Nell'app si entra con nome e password. **Andrea** è l'amministratore: vede tutto (GPU, RAM, log, alimentazione), crea gli altri utenti e sceglie per ognuno quali app può avviare. Gli altri utenti vedono solo se il PC è acceso, il pulsante per accenderlo e le app abilitate (Avvia, Apri), senza dati tecnici.
+
+- Al primo avvio Andrea non ha password: l'app la chiede ("Primo accesso") insieme al token di `config.json`, che sul telefono di Andrea è già salvato. La password si può impostare anche dal PC stesso (`POST /api/auth/setup` da 127.0.0.1).
+- Utenti e sessioni stanno in `agent/users.json` (fuori da git): password solo come hash scrypt, sessioni solo come hash del token. Una sessione dura 180 giorni; cambiare la password di un utente lo fa uscire.
+- Il token di `config.json` vale ancora come amministratore: lo usano il countdown all'accensione e gli script sul PC.
+- Facoltativo: `"relay": { "url": "http://telefono-casa:8765", "token": "..." }` in `config.json`. Dopo l'accesso l'app lo riceve e lo salva, così sui telefoni degli altri basta inserire l'indirizzo del PC.
+
 ### API
 
-Tutte le rotte tranne `/api/health` vogliono `Authorization: Bearer <token>`. Dopo 10 token sbagliati in un minuto lo stesso indirizzo riceve 429.
+Le rotte vogliono `Authorization: Bearer <token>`: il token di sessione dato da `/api/auth/login` oppure il token di `config.json`. Le rotte con 👤 vanno anche agli utenti normali (solo per le app abilitate, e senza dati tecnici: id, nome, stato, link); tutte le altre sono dell'amministratore (403 per gli altri). Dopo 10 token o password sbagliati in un minuto lo stesso indirizzo riceve 429.
 
 | Rotta | |
 |---|---|
 | `GET /api/health` | l'agent è acceso (senza token) |
-| `GET /api/apps` | stato di tutte le app: `stopped`, `starting`, `running`, `stopping` |
-| `GET /api/apps/:id` | stato di un'app |
-| `POST /api/apps/:id/start` | avvio in background (risponde subito); con `?wait=1` aspetta che sia pronta |
+| `GET /api/auth/status` | `{ setup: true }` se Andrea deve ancora scegliere la password (senza token) |
+| `POST /api/auth/setup` | `{ password }` con il token di `config.json` (o dal PC stesso): password di Andrea, risponde `{ token, user }` |
+| `POST /api/auth/login` | `{ name, password }` → `{ token, user }` (senza token) |
+| `POST /api/auth/logout` 👤 | chiude la sessione |
+| `GET /api/me` 👤 | `{ name, role, apps, relay }` |
+| `GET /api/users` · `POST /api/users` | elenco; nuovo utente `{ name, password, apps: ["chatbz", ...] }` |
+| `POST /api/users/:nome` · `DELETE` | cambia `apps` e/o `password`; elimina |
+| `GET /api/apps` 👤 | stato di tutte le app: `stopped`, `starting`, `running`, `stopping` |
+| `GET /api/apps/:id` 👤 | stato di un'app |
+| `POST /api/apps/:id/start` 👤 | avvio in background (risponde subito); con `?wait=1` aspetta che sia pronta |
 | `POST /api/apps/:id/stop` | chiusura gentile, poi forzata |
 | `GET /api/apps/:id/logs?lines=200` | ultime righe di output (solo app avviate dall'agent) |
 | `GET /api/system` | PC, RAM, GPU (`nvidia-smi`) e modelli caricati in Ollama |
@@ -52,7 +68,7 @@ Nota: `sleep` usa `SetSuspendState`, che iberna se l'ibernazione è attiva (`pow
 
 ### Arbitro della GPU
 
-Ollama e ComfyUI non stanno insieme nei 16 GB della scheda, e ChatBz e LocalAI li usano entrambi. L'agent fa da arbitro unico: ogni lavoro delle due app chiede il permesso, ne lavora **uno alla volta**, e quando tocca all'altro motore l'agent scarica i modelli di Ollama o svuota ComfyUI (solo quando serve: due immagini di fila non ricaricano niente). In coda passa prima la priorità (`high` la chat, `normal` le generazioni, `low` i lavori in sottofondo come il social di ChatBz), poi l'ordine di arrivo. Un lavoro già partito non viene interrotto.
+Ollama e ComfyUI non stanno insieme nei 16 GB della scheda, e ChatBz e LocalAI li usano entrambi. L'agent fa da arbitro unico: ogni lavoro delle due app chiede il permesso, ne lavora **uno alla volta**, e quando tocca all'altro motore l'agent scarica i modelli di Ollama o svuota ComfyUI (solo quando serve: due immagini di fila non ricaricano niente). Chi aspetta sa solo il suo posto in coda, non quale app sta usando la GPU né per cosa: ChatBz e LocalAI mostrano "GPU occupata, attendere...". In coda passa prima la priorità (`high` la chat, `normal` le generazioni, `low` i lavori in sottofondo come il social di ChatBz), poi l'ordine di arrivo. Un lavoro già partito non viene interrotto.
 
 Le rotte `/api/gpu*` funzionano anche **senza token, ma solo dal PC stesso** (127.0.0.1): ChatBz e LocalAI non vanno configurati. Un'app che si blocca perde il permesso dopo 60 s senza rinnovi; se l'agent è spento, le app tornano al loro arbitro interno. `/api/system` include lo stato dell'arbitro in `arbiter`.
 
@@ -68,13 +84,15 @@ I test girano su Linux e Windows in GitHub Actions, con un'app finta al posto di
 
 L'APK si compila in GitHub Actions a ogni modifica di `android/` e finisce nella release **android-latest** (pagina *Releases* della repository): dal telefono si scarica `PC-Remoto.apk` e si installa consentendo le fonti sconosciute. Gli aggiornamenti si installano sopra la versione precedente, perché ogni build è firmata con la stessa chiave (`android/app/signing.keystore`, chiave per uso personale, non da Play Store).
 
-Cosa fa:
+Si entra con nome e password (vedi *Utenti e accesso*). Gli utenti normali vedono solo lo stato del PC, il pulsante **Accendi il PC** e le app abilitate da Andrea, con **Avvia** e **Apri**. Andrea, come amministratore, ha in più il pannello GPU, i log, l'alimentazione e la schermata **Utenti** (icona della persona) per creare gli accessi e scegliere le app di ognuno.
+
+Cosa fa (per l'amministratore):
 - mostra se il PC è acceso, spento o in accensione, e lo accende tramite il relay del telefono di casa (`POST /wake`);
 - elenca Ollama, ComfyUI, ChatBz e LocalAI con il loro stato, li avvia e li ferma, mostra i log e apre ChatBz o LocalAI nel browser;
 - mostra VRAM, carico e temperatura della GPU e i modelli Ollama in memoria, con il pulsante "Libera VRAM";
 - spegne, riavvia o sospende il PC (con conferma).
 
-Al primo avvio chiede l'indirizzo dell'agent (es. `pc-casa:7070` con Tailscale) e il token, più indirizzo e token del relay. Lo stato si aggiorna ogni 5 secondi solo mentre l'app è aperta.
+Al primo avvio chiede l'indirizzo dell'agent (es. `pc-casa:7070` con Tailscale) e, se il PC non lo fornisce, indirizzo e token del relay; poi nome e password. Lo stato si aggiorna ogni 5 secondi solo mentre l'app è aperta.
 
 ## Relay Wake-on-LAN (telefono vecchio)
 

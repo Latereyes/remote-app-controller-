@@ -61,7 +61,9 @@ class ModelsTest {
     fun agentErrorMessage() {
         assertEquals("app sconosciuta: x", errorMessage("""{"error":"app sconosciuta: x"}"""))
         assertNull(errorMessage("<html>"))
-        assertFalse(Settings(agentUrl = "x").isConfigured)
+        assertFalse(Settings().isConfigured)
+        assertTrue(Settings(agentUrl = "x").isConfigured)   // il token non serve più: si entra con nome e password
+        assertFalse(Settings(agentUrl = "x").isLoggedIn)
     }
 
     @Test

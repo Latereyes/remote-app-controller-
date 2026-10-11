@@ -37,6 +37,55 @@ data class AppStatus(
     }
 }
 
+/** Chi ha fatto l'accesso (GET /api/me). `apps` è null per l'amministratore, che può avviare tutto. */
+data class Me(
+    val name: String,
+    val role: String,
+    val apps: List<String>?,
+    val relayUrl: String?,
+    val relayToken: String?,
+) {
+    val isAdmin get() = role == "admin"
+
+    companion object {
+        fun fromJson(o: JSONObject): Me {
+            val relay = o.optJSONObject("relay")
+            return Me(
+                name = o.getString("name"),
+                role = o.optString("role", "user"),
+                apps = if (o.isNull("apps")) null else o.optJSONArray("apps").strings(),
+                relayUrl = relay?.optStringOrNull("url"),
+                relayToken = relay?.optStringOrNull("token"),
+            )
+        }
+    }
+}
+
+/** Risposta di login e primo accesso: token di sessione e utente. */
+data class Login(val token: String, val user: Me) {
+    companion object {
+        fun fromJson(text: String): Login {
+            val o = JSONObject(text)
+            return Login(o.getString("token"), Me.fromJson(o.getJSONObject("user")))
+        }
+    }
+}
+
+/** Utente nell'elenco dell'amministratore (GET /api/users). */
+data class UserInfo(val name: String, val role: String, val apps: List<String>) {
+    val isAdmin get() = role == "admin"
+
+    companion object {
+        fun listFromJson(text: String): List<UserInfo> {
+            val arr = JSONArray(text)
+            return (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                UserInfo(o.getString("name"), o.optString("role", "user"), o.optJSONArray("apps").strings())
+            }
+        }
+    }
+}
+
 data class Gpu(val name: String, val memUsedMiB: Int?, val memTotalMiB: Int?, val tempC: Int?, val utilPct: Int?)
 
 data class OllamaModel(val name: String, val sizeVramMiB: Int)

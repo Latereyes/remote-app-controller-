@@ -1,5 +1,7 @@
 node_modules/
 agent/config.json
+agent/users.json
+agent/users.json.tmp
 agent/logs/
 relay/relay.json
 relay/relay.log

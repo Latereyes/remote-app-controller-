@@ -35,7 +35,6 @@ import it.latereyes.remotecontroller.data.Settings
 @Composable
 fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit, onBack: () -> Unit) {
     var agentUrl by remember { mutableStateOf(initial.agentUrl) }
-    var agentToken by remember { mutableStateOf(initial.agentToken) }
     var relayUrl by remember { mutableStateOf(initial.relayUrl) }
     var relayToken by remember { mutableStateOf(initial.relayToken) }
 
@@ -52,8 +51,6 @@ fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit, onBack: () -> 
             Text("PC (agent)", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(agentUrl, { agentUrl = it }, label = { Text("Indirizzo, es. pc-casa:7070") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(agentToken, { agentToken = it }, label = { Text("Token (lo stampa l'agent al primo avvio)") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
 
             Text("Telefono di casa (relay Wake-on-LAN)", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(relayUrl, { relayUrl = it }, label = { Text("Indirizzo, es. telefono-casa:8765") }, singleLine = true,
@@ -61,10 +58,11 @@ fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit, onBack: () -> 
             OutlinedTextField(relayToken, { relayToken = it }, label = { Text("Token del relay") }, singleLine = true,
                 visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
 
-            Text("Con Tailscale puoi usare il nome della macchina (es. pc-casa) oppure l'indirizzo 100.x.y.z.",
+            Text("Con Tailscale puoi usare il nome della macchina (es. pc-casa) oppure l'indirizzo 100.x.y.z. " +
+                "Se Andrea ha impostato il relay sul PC, indirizzo e token del relay arrivano da soli dopo l'accesso.",
                 style = MaterialTheme.typography.bodySmall)
 
-            Button(onClick = { onSave(Settings(agentUrl, agentToken, relayUrl, relayToken)); onBack() }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { onSave(initial.copy(agentUrl = agentUrl, relayUrl = relayUrl, relayToken = relayToken)); onBack() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Salva")
             }
         }

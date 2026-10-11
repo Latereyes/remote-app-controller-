@@ -23,7 +23,7 @@ test('un lavoro alla volta; chi cambia motore scarica l\'altro', async () => {
   const waiting = await gpu.wait(b, 10);
   assert.equal(waiting.status, 'waiting');
   assert.equal(waiting.position, 1);
-  assert.equal(waiting.active.app, 'chatbz');
+  assert.equal(waiting.active, undefined);   // chi aspetta non sa quale app usa la GPU né per cosa
 
   gpu.release(a);
   assert.equal(await grant(gpu, b), 'granted');

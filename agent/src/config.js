@@ -62,6 +62,8 @@ export function normalize(raw, env = process.env) {
     ollamaUrl: raw.ollamaUrl || 'http://127.0.0.1:11434',
     comfyUrl: raw.comfyUrl || 'http://127.0.0.1:8188',
     apps,
+    // Facoltativo: { url, token } del relay Wake-on-LAN, dato all'app dopo l'accesso (così gli altri utenti non lo devono inserire)
+    relay: raw.relay?.url ? { url: String(raw.relay.url), token: String(raw.relay.token || '') } : null,
     power: { ...DEFAULT_POWER, ...(raw.power || {}) },
   };
 }

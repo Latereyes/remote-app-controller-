@@ -7,6 +7,7 @@ import { AppManager } from './src/apps.js';
 import { createSystem } from './src/system.js';
 import { createServer } from './src/http.js';
 import { GpuArbiter } from './src/gpu.js';
+import { UserStore } from './src/users.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configFile = process.env.AGENT_CONFIG ? path.resolve(process.env.AGENT_CONFIG) : path.join(root, 'config.json');
@@ -16,6 +17,15 @@ try {
   ({ config, created } = loadConfig(configFile, path.join(root, 'config.example.json')));
 } catch (e) {
   console.error(`\n  ⚠ Configurazione non valida (${configFile}): ${e.message}\n`);
+  process.exit(1);
+}
+
+// Utenti dell'app Android (users.json accanto a config.json)
+let users;
+try {
+  users = new UserStore(path.join(path.dirname(configFile), 'users.json'));
+} catch (e) {
+  console.error(`\n  ⚠ ${e.message}\n`);
   process.exit(1);
 }
 
@@ -33,13 +43,14 @@ gpu.on('state', (s) => {
   if (key && key !== lastGpuLog) console.log(`  [gpu] ${key} (${s.owner || '-'}${s.queue.length ? `, ${s.queue.length} in coda` : ''})`);
   lastGpuLog = key;
 });
-const server = createServer({ config, apps, system, gpu, getMode });
+const server = createServer({ config, apps, system, gpu, users, getMode });
 
 server.listen(config.port, config.host, () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i?.family === 'IPv4' && !i.internal).map((i) => i.address);
   console.log('\n  Remote app controller: agent pronto');
   for (const ip of ips) console.log(`  → http://${ip}:${config.port}`);
   console.log(`  App: ${config.apps.map((a) => a.name).join(', ')}`);
+  if (users.needsSetup()) console.log('\n  Primo accesso: apri l\'app sul telefono e scegli la password di Andrea.');
   if (created) {
     console.log(`\n  Primo avvio: ho creato ${configFile}`);
     console.log(`  Token per l'app Android: ${config.token}`);

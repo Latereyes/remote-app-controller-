@@ -16,8 +16,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import it.latereyes.remotecontroller.ui.AppTheme
 import it.latereyes.remotecontroller.ui.HomeScreen
+import it.latereyes.remotecontroller.ui.LoginScreen
 import it.latereyes.remotecontroller.ui.MainViewModel
 import it.latereyes.remotecontroller.ui.SettingsScreen
+import it.latereyes.remotecontroller.ui.UsersScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -36,11 +38,18 @@ class MainActivity : ComponentActivity() {
             AppTheme {
                 val state by vm.state.collectAsStateWithLifecycle()
                 var showSettings by rememberSaveable { mutableStateOf(!state.settings.isConfigured) }
-                if (showSettings) {
-                    BackHandler(enabled = state.settings.isConfigured) { showSettings = false }
-                    SettingsScreen(state.settings, onSave = vm::saveSettings, onBack = { showSettings = false })
-                } else {
-                    HomeScreen(state, vm, onSettings = { showSettings = true })
+                var showUsers by rememberSaveable { mutableStateOf(false) }
+                when {
+                    showSettings -> {
+                        BackHandler(enabled = state.settings.isConfigured) { showSettings = false }
+                        SettingsScreen(state.settings, onSave = vm::saveSettings, onBack = { showSettings = false })
+                    }
+                    !state.settings.isLoggedIn -> LoginScreen(state, vm, onSettings = { showSettings = true })
+                    showUsers && state.isAdmin -> {
+                        BackHandler { showUsers = false }
+                        UsersScreen(state, vm, onBack = { showUsers = false })
+                    }
+                    else -> HomeScreen(state, vm, onSettings = { showSettings = true }, onUsers = { showUsers = true })
                 }
             }
         }

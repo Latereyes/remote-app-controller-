@@ -124,6 +124,8 @@ All'accesso automatico (modalità Xbox) compare in alto una finestra con un coun
 
 Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox).
 
+Con Sunshine installato conta come uso anche una connessione da Moonlight. Dopo un Wake-on-LAN la Deck vede il PC solo quando Sunshine ha finito di avviarsi (circa 30 s dopo l'accesso), quindi il countdown aspetta Sunshine e scade non prima di `sunshineGraceSeconds` (45) secondi da quando è pronto. Se Sunshine non è pronto entro `sunshineWaitMax` (120) secondi, il countdown riparte senza aspettarlo. Il log letto è `sunshineLog`. In modalità server si arriva quindi circa 75 s dopo l'accesso invece di 30.
+
 Installazione (PowerShell nella cartella `boot`):
 
 ```powershell

@@ -11,6 +11,8 @@ data class Settings(
     val agentToken: String = "",
     /** Token di sessione dopo l'accesso con nome e password. */
     val sessionToken: String = "",
+    /** Ruolo dell'ultimo accesso: col PC spento l'agent non può dirlo, ma serve per «Accendi per giocare». */
+    val role: String = "",
 ) {
     val isConfigured get() = agentUrl.isNotBlank()
     val isLoggedIn get() = sessionToken.isNotBlank()
@@ -26,6 +28,7 @@ class SettingsStore(context: Context) {
         relayToken = prefs.getString("relayToken", "") ?: "",
         agentToken = prefs.getString("agentToken", "") ?: "",
         sessionToken = prefs.getString("sessionToken", "") ?: "",
+        role = prefs.getString("role", "") ?: "",
     )
 
     fun save(s: Settings) {
@@ -35,6 +38,7 @@ class SettingsStore(context: Context) {
             .putString("relayToken", s.relayToken.trim())
             .putString("agentToken", s.agentToken.trim())
             .putString("sessionToken", s.sessionToken)
+            .putString("role", if (s.sessionToken.isEmpty()) "" else s.role)
             .apply()
     }
 }

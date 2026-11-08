@@ -9,3 +9,4 @@ __pycache__/
 boot/boot.log
 boot/mode.txt
 agent/*.log
+boot/game.txt

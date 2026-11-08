@@ -178,12 +178,21 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
                         Button(onClick = vm::wake, enabled = "wake" !in state.busy && state.pc != PcState.WAKING, modifier = Modifier.fillMaxWidth()) {
                             Text("Accendi il PC")
                         }
+                        // Solo l'amministratore: per giocare il countdown non avvia Ollama e ComfyUI
+                        if (state.wasAdmin) OutlinedButton(onClick = vm::wakeForGame, enabled = "wake" !in state.busy && state.pc != PcState.WAKING, modifier = Modifier.fillMaxWidth()) {
+                            Text("Accendi per giocare (Steam Deck)")
+                        }
                     } else {
                         Text("Per accendere il PC da qui imposta il relay del telefono di casa nelle impostazioni.",
                             style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 PcState.ONLINE -> if (admin) {
+                    if (state.mode != "xbox") {
+                        OutlinedButton(onClick = vm::gameMode, enabled = "game" !in state.busy, modifier = Modifier.fillMaxWidth()) {
+                            Text("Passa a modalità gioco")
+                        }
+                    }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val off = "power" in state.busy
                         OutlinedButton(onClick = { onPower("shutdown") }, enabled = !off) { Text("Spegni") }

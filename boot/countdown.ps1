@@ -6,6 +6,7 @@
   Anche una connessione da Moonlight (log di Sunshine) conta come uso. Se Sunshine è installato, il countdown
   aspetta che sia pronto e poi lascia altri "sunshineGraceSeconds" per collegarsi: dopo un Wake-on-LAN
   la Deck vede il PC solo quando Sunshine ha finito di avviarsi.
+  Conta come uso anche «Accendi per giocare» dall'app: l'agent scrive boot\game.txt e il countdown resta in modalità Xbox.
 
   -Seconds N  sovrascrive boot.json
   -NoGui      niente finestra (per i test)
@@ -146,8 +147,16 @@ function Test-Sunshine {
   return $false
 }
 
+# Richiesta «per giocare» dall'app (l'agent scrive game.txt): vale se arrivata dopo l'ultima accensione
+$gameFile = Join-Path $here 'game.txt'
+function Test-GameRequest {
+  if (-not (Test-Path $gameFile)) { return $false }
+  return (Get-Item $gameFile).LastWriteTime -gt $bootTime
+}
+
 $script:activity = ''
 function Test-UserPresent {
+  if (Test-GameRequest) { $script:activity = 'app, per giocare'; return $true }
   if ([UserInput]::LastInputTick() -ne $startTick) { $script:activity = 'mouse o tastiera'; return $true }
   if ([UserInput]::GamepadActivity()) { $script:activity = 'controller'; return $true }
   if (Test-Sunshine) { return $true }
@@ -234,7 +243,7 @@ $timer.Interval = 50
 $timer.Add_Tick({
   if (Test-UserPresent) { $script:result = 'xbox'; $timer.Stop(); $form.Close(); return }
   if (-not $script:sunshineReady) {
-    $label.Text = "Aspetto Sunshine prima del countdown`nMuovi il mouse, premi un tasto o collegati con Moonlight per restare in modalità Xbox"
+    $label.Text = "Aspetto Sunshine prima del countdown`nMuovi il mouse, premi un tasto, collegati con Moonlight o usa «Accendi per giocare» per restare in modalità Xbox"
     return
   }
   $left = [math]::Ceiling(($deadline - (Get-Date)).TotalSeconds)

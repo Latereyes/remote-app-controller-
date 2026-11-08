@@ -42,7 +42,7 @@ const userApp = (a) => ({ id: a.id, name: a.name, state: a.state, openUrl: a.ope
  * ChatBz e LocalAI le usano senza configurazione.
  * Dopo 10 tentativi sbagliati (token o password) in un minuto lo stesso indirizzo riceve 429.
  */
-export function createServer({ config, apps, system, gpu, users, getMode = () => null, log = console.log }) {
+export function createServer({ config, apps, system, gpu, users, getMode = () => null, requestGame = null, log = console.log }) {
   const failures = new Map();
   const allowed = (who, id) => who.role === 'admin' || who.apps.includes(id);
   const checkApps = (list) => {
@@ -81,6 +81,11 @@ export function createServer({ config, apps, system, gpu, users, getMode = () =>
       return { ...view(await apps.status(id)), state: 'starting', accepted: true };
     }, user],
     ['POST', /^\/api\/apps\/([a-z0-9-]+)\/stop$/, (m) => apps.stop(m[1])],
+    // «Per giocare» (Steam Deck): il countdown resta in modalità Xbox, o si lascia la modalità server
+    ['POST', /^\/api\/mode\/game$/, (m, url, req, who) => {
+      if (!requestGame) throw Object.assign(new Error('non disponibile'), { status: 501 });
+      return requestGame(who?.name || 'PC');
+    }],
     ['GET', /^\/api\/system$/, async () => ({ ...(await system.info()), arbiter: gpu.state() })],
     ['GET', /^\/api\/gpu$/, () => gpu.state(), { local: true }],
     ['POST', /^\/api\/gpu\/free$/, () => gpu.free(), { local: true }],

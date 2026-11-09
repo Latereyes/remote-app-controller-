@@ -1,5 +1,7 @@
 {
   "seconds": 30,
   "serverApps": ["ollama", "comfy"],
-  "agentAlways": true
+  "agentAlways": true,
+  "sunshineGraceSeconds": 45,
+  "sunshineWaitMax": 120
 }

@@ -62,6 +62,7 @@ Le rotte vogliono `Authorization: Bearer <token>`: il token di sessione dato da 
 | `POST /api/gpu/free` | al suo turno scarica i modelli di Ollama e libera la VRAM di ComfyUI |
 | `POST /api/gpu/acquire` | chiede la GPU: `{ who: "ollama"\|"comfy"\|"none", app, label, priority: "high"\|"normal"\|"low" }`, poi `{ ticket }` finché non risponde `granted` |
 | `POST /api/gpu/leases/:id/renew` · `release` | rinnova (entro 60 s) o restituisce il permesso; `release` su un biglietto in coda vi rinuncia |
+| `POST /api/mode/game` | «per giocare»: scrive `boot/game.txt` (il countdown resta in modalità Xbox); se il PC è già in modalità server chiude le `serverApps` e passa a Xbox |
 | `POST /api/system/shutdown` · `restart` · `sleep` | alimentazione (parte dopo 1,5 s) |
 
 Nota: `sleep` usa `SetSuspendState`, che iberna se l'ibernazione è attiva (`powercfg /h off` per avere la sospensione vera).
@@ -88,6 +89,7 @@ Si entra con nome e password (vedi *Utenti e accesso*). Gli utenti normali vedon
 
 Cosa fa (per l'amministratore):
 - mostra se il PC è acceso, spento o in accensione, e lo accende tramite il relay del telefono di casa (`POST /wake`);
+- **Accendi per giocare (Steam Deck)**: accende il PC come sopra, e appena l'agent risponde gli chiede di restare in modalità Xbox (`POST /api/mode/game`), così Ollama e ComfyUI non partono e si gioca da Moonlight. Se il PC è già acceso in modalità server, **Passa a modalità gioco** chiude le app del countdown (`serverApps`) e torna in modalità Xbox;
 - elenca Ollama, ComfyUI, ChatBz e LocalAI con il loro stato, li avvia e li ferma, mostra i log e apre ChatBz o LocalAI nel browser;
 - mostra VRAM, carico e temperatura della GPU e i modelli Ollama in memoria, con il pulsante "Libera VRAM";
 - spegne, riavvia o sospende il PC (con conferma).
@@ -123,6 +125,12 @@ Test: `cd relay && python3 -m unittest -v`.
 All'accesso automatico (modalità Xbox) compare in alto una finestra con un countdown di 30 secondi. Mouse, tastiera o controller Xbox lo interrompono e il PC resta in modalità Xbox. Se nessuno tocca niente, il PC passa in modalità server: si assicura che l'agent sia acceso e avvia le app in `serverApps` (di base Ollama e ComfyUI). La modalità scelta finisce in `boot/mode.txt`, e l'app la mostra.
 
 Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox).
+
+Con la TV spenta all'accesso non c'è nessuno schermo attivo e Sunshine non può trasmettere (Moonlight dà 503): il countdown lancia `boot/schermo-virtuale.ps1`, che in quel caso accende lo schermo virtuale (Virtual Display Driver, monitor `MTT1337`) con MultiMonitorTool e lo rende principale. Con la TV accesa non fa niente. Impostazioni in `boot.json`: `multiMonitorTool` (di base `C:\tools\MultiMonitorTool.exe`), `virtualDisplay`, `virtualDisplayHwId`.
+
+Conta come uso anche **Accendi per giocare** dall'app: l'agent (che parte all'accesso con `agentAlways`) scrive `boot/game.txt` e il countdown, se il file è più recente dell'ultima accensione, resta in modalità Xbox.
+
+Con Sunshine installato conta come uso anche una connessione da Moonlight. Dopo un Wake-on-LAN la Deck vede il PC solo quando Sunshine ha finito di avviarsi (circa 30 s dopo l'accesso), quindi il countdown aspetta Sunshine e scade non prima di `sunshineGraceSeconds` (45) secondi da quando è pronto. Se Sunshine non è pronto entro `sunshineWaitMax` (120) secondi, il countdown riparte senza aspettarlo. Il log letto è `sunshineLog`. In modalità server si arriva quindi circa 75 s dopo l'accesso invece di 30.
 
 Installazione (PowerShell nella cartella `boot`):
 

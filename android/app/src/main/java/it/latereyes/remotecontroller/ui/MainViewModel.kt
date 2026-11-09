@@ -40,6 +40,8 @@ data class UiState(
     val lastUpdate: Long = 0,
 ) {
     val isAdmin get() = user?.isAdmin == true
+    /** Amministratore anche col PC spento (ruolo dell'ultimo accesso). */
+    val wasAdmin get() = user?.isAdmin ?: (settings.isLoggedIn && settings.role == "admin")
 }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -49,6 +51,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Fino a quando considerare il PC "in accensione" dopo aver mandato il Wake-on-LAN. */
     private var wakingUntil = 0L
+
+    /** «Accendi per giocare»: appena l'agent risponde gli si dice di restare in modalità Xbox. */
+    private var gameRequested = false
 
     private val agent get() = _state.value.settings.let { AgentClient(it.agentUrl, it.sessionToken) }
 
@@ -79,6 +84,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val mode = client.health()
         if (mode == null) {
             val pc = if (System.currentTimeMillis() < wakingUntil) PcState.WAKING else PcState.OFFLINE
+            if (pc == PcState.OFFLINE) gameRequested = false
             _state.update { it.copy(pc = pc, apps = emptyList(), system = null, lastUpdate = System.currentTimeMillis()) }
             return
         }
@@ -88,12 +94,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(pc = PcState.ONLINE, mode = mode, needsSetup = setup, lastUpdate = System.currentTimeMillis()) }
             return
         }
+        if (gameRequested) {
+            gameRequested = false
+            runCatching { client.gameMode() }
+                .onSuccess { _state.update { it.copy(message = "Il PC resta in modalità gioco: collegati con Moonlight") } }
+                .onFailure { e -> _state.update { it.copy(message = "Modalità gioco non riuscita: ${e.message}") } }
+        }
         try {
             val me = client.me()
+            if (me.role != s.role) store.save(s.copy(role = me.role))
             val apps = client.apps()
             // Dati tecnici (GPU, RAM, modelli) solo per l'amministratore
             val system = if (me.isAdmin) runCatching { client.system() }.getOrNull() else null
-            _state.update { it.copy(pc = PcState.ONLINE, mode = mode, user = me, apps = apps, system = system ?: it.system.takeIf { me.isAdmin }, lastUpdate = System.currentTimeMillis()) }
+            _state.update { it.copy(settings = store.load(), pc = PcState.ONLINE, mode = mode, user = me, apps = apps, system = system ?: it.system.takeIf { me.isAdmin }, lastUpdate = System.currentTimeMillis()) }
         } catch (e: Exception) {
             if (e is ApiException && e.status == 401) signedOut("Accesso scaduto, entra di nuovo")
             else _state.update { it.copy(pc = PcState.ONLINE, message = e.message) }
@@ -127,7 +140,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Il relay del telefono di casa arriva dall'agent, se Andrea l'ha messo in config.json
         val relayUrl = login.user.relayUrl?.takeIf { s.relayUrl.isBlank() } ?: s.relayUrl
         val relayToken = login.user.relayToken?.takeIf { s.relayToken.isBlank() } ?: s.relayToken
-        store.save(s.copy(sessionToken = login.token, relayUrl = relayUrl, relayToken = relayToken))
+        store.save(s.copy(sessionToken = login.token, relayUrl = relayUrl, relayToken = relayToken, role = login.user.role))
         _state.update { it.copy(settings = store.load(), user = login.user, needsSetup = false) }
     }
 
@@ -154,6 +167,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         RelayClient(s.relayUrl, s.relayToken).wake()
         wakingUntil = System.currentTimeMillis() + 3 * 60 * 1000
         _state.update { it.copy(pc = PcState.WAKING) }
+    }
+
+    /** Accende il PC per giocare (Steam Deck): niente modalità server, Ollama e ComfyUI restano spenti. */
+    fun wakeForGame() = command("wake", "Accensione per giocare inviata") {
+        val s = _state.value.settings
+        RelayClient(s.relayUrl, s.relayToken).wake()
+        gameRequested = true
+        wakingUntil = System.currentTimeMillis() + 3 * 60 * 1000
+        _state.update { it.copy(pc = PcState.WAKING) }
+    }
+
+    /** PC già acceso in modalità server: chiude Ollama e ComfyUI e torna in modalità Xbox per giocare. */
+    fun gameMode() = command("game", "Modalità gioco: collegati con Moonlight") {
+        val mode = agent.gameMode()
+        _state.update { it.copy(mode = mode) }
     }
 
     fun start(app: AppStatus) = command(app.id, null) { agent.start(app.id) }

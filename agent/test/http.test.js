@@ -28,7 +28,7 @@ before(async () => {
   const gpu = new GpuArbiter({ unload: { ollama: async () => ['gemma'], comfy: async () => true }, log: () => {} });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-http-'));
   const users = new UserStore(path.join(dir, 'users.json'));
-  server = createServer({ config: { token, relay: { url: 'http://relay:8765', token: 'r' } }, apps, system, gpu, users, getMode: () => 'server', log: () => {} });
+  server = createServer({ config: { token, relay: { url: 'http://relay:8765', token: 'r' } }, apps, system, gpu, users, getMode: () => 'server', requestGame: async (who) => { calls.push(['game', who]); return { mode: 'xbox' }; }, log: () => {} });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -68,6 +68,8 @@ test('rotte delle app, del sistema e dell\'alimentazione', async () => {
   assert.equal((await call('/api/system/shutdown', { method: 'POST' })).status, 200);
   assert.equal((await call('/api/system/formatta', { method: 'POST' })).status, 404);
   assert.deepEqual(calls.at(-1), ['power', 'shutdown']);
+  assert.deepEqual(await (await call('/api/mode/game', { method: 'POST' })).json(), { mode: 'xbox' });
+  assert.deepEqual(calls.at(-1), ['game', 'agent']);
 });
 
 test('arbitro della GPU: dal PC stesso senza token', async () => {
@@ -132,7 +134,7 @@ test('utente normale: solo le app abilitate, senza dati tecnici', async () => {
   assert.equal(started.port, undefined);
   assert.deepEqual(calls.at(-1), ['start', 'chatbz']);
   for (const [method, p] of [['POST', '/api/apps/chatbz/stop'], ['GET', '/api/apps/chatbz/logs'], ['GET', '/api/system'],
-    ['POST', '/api/system/shutdown'], ['GET', '/api/gpu'], ['POST', '/api/gpu/free'], ['GET', '/api/users']]) {
+    ['POST', '/api/system/shutdown'], ['POST', '/api/mode/game'], ['GET', '/api/gpu'], ['POST', '/api/gpu/free'], ['GET', '/api/users']]) {
     assert.equal((await call(p, { method, auth: g })).status, 403, `${method} ${p}`);
   }
 

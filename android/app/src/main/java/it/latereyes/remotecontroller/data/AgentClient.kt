@@ -110,6 +110,10 @@ class AgentClient(private val baseUrl: String, private val token: String) {
 
     suspend fun system(): SystemInfo = SystemInfo.fromJson(request(baseUrl, "/api/system", token, timeoutMs = 10000))
 
+    /** «Per giocare»: il PC resta (o torna) in modalità Xbox. Risponde la modalità dopo la richiesta. */
+    suspend fun gameMode(): String =
+        JSONObject(request(baseUrl, "/api/mode/game", token, "POST", timeoutMs = 60000)).optString("mode")
+
     suspend fun freeGpu() { request(baseUrl, "/api/gpu/free", token, "POST", timeoutMs = 60000) }
 
     /** action: shutdown | restart | sleep */

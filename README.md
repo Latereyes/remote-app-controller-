@@ -126,6 +126,8 @@ All'accesso automatico (modalità Xbox) compare in alto una finestra con un coun
 
 Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox).
 
+Con la TV spenta all'accesso non c'è nessuno schermo attivo e Sunshine non può trasmettere (Moonlight dà 503): il countdown lancia `boot/schermo-virtuale.ps1`, che in quel caso accende lo schermo virtuale (Virtual Display Driver, monitor `MTT1337`) con MultiMonitorTool e lo rende principale. Con la TV accesa non fa niente. Impostazioni in `boot.json`: `multiMonitorTool` (di base `C:\tools\MultiMonitorTool.exe`), `virtualDisplay`, `virtualDisplayHwId`.
+
 Conta come uso anche **Accendi per giocare** dall'app: l'agent (che parte all'accesso con `agentAlways`) scrive `boot/game.txt` e il countdown, se il file è più recente dell'ultima accensione, resta in modalità Xbox.
 
 Con Sunshine installato conta come uso anche una connessione da Moonlight. Dopo un Wake-on-LAN la Deck vede il PC solo quando Sunshine ha finito di avviarsi (circa 30 s dopo l'accesso), quindi il countdown aspetta Sunshine e scade non prima di `sunshineGraceSeconds` (45) secondi da quando è pronto. Se Sunshine non è pronto entro `sunshineWaitMax` (120) secondi, il countdown riparte senza aspettarlo. Il log letto è `sunshineLog`. In modalità server si arriva quindi circa 75 s dopo l'accesso invece di 30.

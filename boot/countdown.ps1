@@ -41,6 +41,13 @@ function Write-Log([string]$msg) {
   if (-not $DryRun) { Add-Content -Path $logFile -Value $line -Encoding UTF8 }
 }
 
+# Con la TV spenta serve lo schermo virtuale, sia per giocare con Moonlight sia in modalità server:
+# lo controllo a ogni accesso, in parallelo al countdown (prova sul PC 2026-11-08: senza schermi Moonlight dà 503)
+$screenScript = Join-Path $here 'schermo-virtuale.ps1'
+if (-not $DryRun -and (Test-Path $screenScript)) {
+  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$screenScript`""
+}
+
 # Il countdown può partire da più punti (accesso, avvio della modalità Xbox): una volta per accensione basta
 $modeFile = Join-Path $here 'mode.txt'
 if (-not $Force -and -not $DryRun -and (Test-Path $modeFile)) {

@@ -65,6 +65,19 @@ export function normalize(raw, env = process.env) {
     // Facoltativo: { url, token } del relay Wake-on-LAN, dato all'app dopo l'accesso (così gli altri utenti non lo devono inserire)
     relay: raw.relay?.url ? { url: String(raw.relay.url), token: String(raw.relay.token || '') } : null,
     power: { ...DEFAULT_POWER, ...(raw.power || {}) },
+    // Terminale e Claude: solo per l'amministratore e solo da Tailscale o dal PC stesso (vedi http.js)
+    terminal: { enabled: raw.terminal?.enabled !== false, cwd: expandEnv(raw.terminal?.cwd || '%USERPROFILE%', env), shell: Array.isArray(raw.terminal?.shell) ? raw.terminal.shell.map(String) : null },
+    claude: {
+      enabled: raw.claude?.enabled !== false,
+      command: expandEnv(raw.claude?.command || 'claude', env),
+      cwd: expandEnv(raw.claude?.cwd || 'C:\\AI', env),
+      name: String(raw.claude?.name || 'PC di casa'),
+      args: (raw.claude?.args || []).map(String),
+      approvals: raw.claude?.approvals !== false,
+      approvalTimeoutSec: Number(raw.claude?.approvalTimeoutSec || 600),
+    },
+    // Reti da cui si possono usare terminale, Claude e permessi: di base Tailscale (100.64.0.0/10) e il PC stesso
+    trustedNets: Array.isArray(raw.trustedNets) ? raw.trustedNets.map(String) : ['100.64.0.0/10', 'fd7a:115c:a1e0::/48'],
   };
 }
 

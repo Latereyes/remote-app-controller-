@@ -95,4 +95,43 @@ class ModelsTest {
         assertTrue(users[0].apps.isEmpty())
         assertEquals(listOf("chatbz"), users[1].apps)
     }
+
+    @Test
+    fun displaysAndGamingFromAgentJson() {
+        val d = DisplaysInfo.fromJson(
+            """{"available":true,"displays":[
+                {"name":"\\\\.\\DISPLAY1","monitor":"LG TV","active":false,"primary":false,"disconnected":false,"resolution":null,"hz":null,"virtual":false,"moonlight":false},
+                {"name":"\\\\.\\DISPLAY2","monitor":"VDD by MTT","active":true,"primary":true,"disconnected":false,"resolution":"1920 X 1080","hz":60,"virtual":true,"moonlight":true}],
+               "stream":{"available":true,"streaming":true,"since":"2026-11-08T14:22:01","outputName":"VDD","onlyDisplay":true}}"""
+        )
+        assertEquals(1, d.activeCount)
+        assertTrue(d.displays[1].moonlight)
+        assertEquals(60, d.displays[1].hz)
+        assertTrue(d.stream.streaming)
+
+        val g = GamingInfo.fromJson(
+            """{"active":true,"game":{"appId":313590,"name":"Cyberpunk 2077"},"stream":{"available":false,"streaming":false},
+                "cpuPct":41,"cpuModel":"AMD","memory":{"totalMiB":32768,"freeMiB":16384},
+                "gpu":[{"name":"RTX","utilPct":97,"tempC":70,"powerW":265.3,"powerLimitW":285,"clockMHz":2745,"clockMaxMHz":3105,
+                        "memClockMHz":10501,"fanPct":55,"memUsedMiB":9000,"memTotalMiB":16376,"pstate":"P2","encoderPct":null,"throttle":["limite di potenza"]}]}"""
+        )
+        assertEquals("Cyberpunk 2077", g.game!!.name)
+        assertEquals(265.3, g.gpus[0].powerW!!, 0.01)
+        assertNull(g.gpus[0].encoderPct)
+        assertEquals(listOf("limite di potenza"), g.gpus[0].throttle)
+    }
+
+    @Test
+    fun claudeApprovalsTerminalFromAgentJson() {
+        val c = ClaudeStatus.fromJson("""{"running":true,"pid":5,"startedAt":1700000000000,"name":"PC di casa","cwd":"C:\\AI","approvals":true,"pending":2}""")
+        assertTrue(c.running)
+        assertEquals(1700000000000L, c.startedAt)
+        assertEquals(2, c.pending)
+        assertNull(ClaudeStatus.fromJson("""{"running":false,"startedAt":null,"name":"x","cwd":"y"}""").startedAt)
+        val a = Approval.listFromJson("""[{"id":"abc","source":"Claude","title":"Bash: ls","detail":"ls","tool":"Bash","state":"pending","expiresAt":5}]""")
+        assertEquals("Bash: ls", a[0].title)
+        val t = TerminalChunk.fromJson("""{"text":"ciao\n","next":5,"alive":false,"exitCode":0}""")
+        assertEquals(5L, t.next)
+        assertFalse(t.alive)
+    }
 }

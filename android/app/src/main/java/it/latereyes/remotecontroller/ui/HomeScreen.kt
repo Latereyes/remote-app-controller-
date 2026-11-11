@@ -1,7 +1,20 @@
 package it.latereyes.remotecontroller.ui
 
+import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import it.latereyes.remotecontroller.data.SshInfo
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -68,12 +81,21 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit, onUsers: () -> Unit) {
+fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit, onUsers: () -> Unit, onTerminal: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var confirmPower by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     val admin = state.isAdmin
+    val context = LocalContext.current
+    // Android 13+: le richieste di permesso di Claude arrivano come notifiche solo se l'app può mandarle
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    fun askNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     LaunchedEffect(state.message) {
         state.message?.let { snackbar.showSnackbar(it); vm.dismissMessage() }
@@ -82,7 +104,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit, onUser
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("PC Remoto") },
+                title = { Text("PC Remoto", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { scope.launch { vm.refresh() } }) { Icon(Icons.Default.Refresh, "Aggiorna") }
                     if (admin) IconButton(onClick = onUsers) { Icon(Icons.Default.Person, "Utenti") }
@@ -107,8 +129,25 @@ fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit, onUser
             item { PcCard(state, vm, onPower = { confirmPower = it }) }
             if (state.pc == PcState.ONLINE) {
                 // GPU, RAM, log e alimentazione solo per l'amministratore: gli altri vedono le loro app e basta
-                if (admin) state.system?.let { sys -> item { GpuCard(sys, busy = "gpu" in state.busy, onFree = vm::freeGpu) } }
-                item { Text(if (admin) "App" else "Le tue app", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp)) }
+                if (admin) {
+                    // Prima le domande che aspettano una risposta, poi il gioco se si sta giocando
+                    if (state.approvals.isNotEmpty()) item { ApprovalsPanel(state.approvals, state.busy, onDecide = vm::decide) }
+                    if (state.showGaming) state.gaming?.let { g -> item { GamingPanel(g) } }
+                    if (state.ssh != null || state.claude != null) item {
+                        TerminalPanel(state.ssh, onSsh = { ssh -> openSsh(context, ssh, state.settings.agentUrl, vm) }, onQuick = onTerminal)
+                    }
+                    state.claude?.let { c ->
+                        item {
+                            ClaudePanel(c, busy = "claude" in state.busy, onStart = {
+                                askNotifications()
+                                vm.startClaude()
+                            }, onStop = vm::stopClaude, onOpenClaude = { openClaudeApp(context) })
+                        }
+                    }
+                    state.displays?.let { d -> item { DisplaysPanel(d) } }
+                    state.system?.let { sys -> item { GpuCard(sys, busy = "gpu" in state.busy, onFree = vm::freeGpu) } }
+                }
+                item { Text(if (admin) "App" else "Le tue app", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp, start = 4.dp)) }
                 if (!admin && state.apps.isEmpty()) {
                     item { Text("Nessuna app abilitata: chiedi ad Andrea.", style = MaterialTheme.typography.bodySmall) }
                 }
@@ -147,28 +186,49 @@ internal fun Dot(color: Color) {
 
 @Composable
 private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val admin = state.isAdmin
-            val (color, text) = when (state.pc) {
-                PcState.ONLINE -> Green to when {
-                    !admin -> "Acceso"
-                    state.mode == "server" -> "Acceso, modalità server"
-                    state.mode == "xbox" -> "Acceso, modalità Xbox"
-                    else -> "Acceso"
-                }
-                PcState.WAKING -> Amber to "In accensione…"
-                PcState.OFFLINE -> Grey to "Spento o non raggiungibile"
-                PcState.UNKNOWN -> Grey to "Controllo…"
-            }
+    val admin = state.isAdmin
+    val (color, text) = when (state.pc) {
+        PcState.ONLINE -> Green to when {
+            !admin -> "Acceso"
+            state.gaming?.stream?.streaming == true -> "Acceso, in stream con Moonlight"
+            state.mode == "server" -> "Acceso, modalità server"
+            state.mode == "xbox" -> "Acceso, modalità Xbox"
+            else -> "Acceso"
+        }
+        PcState.WAKING -> Amber to "In accensione…"
+        PcState.OFFLINE -> Grey to "Spento o non raggiungibile"
+        PcState.UNKNOWN -> Grey to "Controllo…"
+    }
+    // Testata con una sfumatura del colore di stato: si capisce a colpo d'occhio se il PC è acceso
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(
+            Modifier.background(Brush.verticalGradient(listOf(color.copy(alpha = 0.22f), Color.Transparent))).padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Dot(color)
-                Spacer(Modifier.width(8.dp))
-                Text(text, style = MaterialTheme.typography.titleMedium)
+                Box(Modifier.size(14.dp).clip(CircleShape).background(color))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(text, style = MaterialTheme.typography.titleLarge)
+                    state.system?.takeIf { admin && state.pc == PcState.ONLINE }?.let { sys ->
+                        Text("${sys.hostname} · acceso da ${formatUptime(sys.uptimeSec)}",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
             state.system?.takeIf { admin && state.pc == PcState.ONLINE }?.let { sys ->
-                Text("${sys.hostname} · acceso da ${formatUptime(sys.uptimeSec)} · RAM libera ${sys.memFreeMiB / 1024} di ${sys.memTotalMiB / 1024} GB",
-                    style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val g = sys.gpus?.firstOrNull()
+                    val usedRam = (sys.memTotalMiB - sys.memFreeMiB) / 1024f
+                    StatTile("RAM", "%.0f/%.0f GB".format(usedRam, sys.memTotalMiB / 1024f), Modifier.weight(1f))
+                    StatTile("GPU", g?.utilPct?.let { "$it%" } ?: "–", Modifier.weight(1f))
+                    StatTile("TEMP GPU", g?.tempC?.let { "$it °C" } ?: "–", Modifier.weight(1f),
+                        color = levelColor((g?.tempC ?: 0) / 90f, 0.8f, 0.92f))
+                }
             }
             if (state.pc == PcState.WAKING) LinearProgressIndicator(Modifier.fillMaxWidth())
 
@@ -189,7 +249,7 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
                 }
                 PcState.ONLINE -> if (admin) {
                     if (state.mode != "xbox") {
-                        OutlinedButton(onClick = vm::gameMode, enabled = "game" !in state.busy, modifier = Modifier.fillMaxWidth()) {
+                        FilledTonalButton(onClick = vm::gameMode, enabled = "game" !in state.busy, modifier = Modifier.fillMaxWidth()) {
                             Text("Passa a modalità gioco")
                         }
                     }
@@ -205,38 +265,93 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
     }
 }
 
+/**
+ * Terminale del PC: quello vero è SSH (client del telefono con la chiave, solo via Tailscale);
+ * «Comandi rapidi» è la shell dentro l'app, comoda per un comando al volo senza client SSH.
+ */
 @Composable
-private fun GpuCard(sys: SystemInfo, busy: Boolean, onFree: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("GPU", style = MaterialTheme.typography.titleMedium)
-            val gpus = sys.gpus
-            if (gpus.isNullOrEmpty()) {
-                Text("Dati non disponibili (nvidia-smi non risponde)", style = MaterialTheme.typography.bodySmall)
+private fun TerminalPanel(ssh: SshInfo?, onSsh: (SshInfo) -> Unit, onQuick: () -> Unit) {
+    Panel("Terminale del PC", trailing = {
+        when {
+            ssh?.running == true -> Pill("ssh attivo", Green)
+            ssh?.installed == true -> Pill("ssh spento", Amber)
+            else -> Pill("ssh da attivare", Grey)
+        }
+    }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                Text(">_", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
-            gpus?.forEach { g ->
-                val used = g.memUsedMiB ?: 0
-                val total = g.memTotalMiB ?: 0
-                Text(g.name, style = MaterialTheme.typography.bodyMedium)
-                if (total > 0) LinearProgressIndicator(progress = { used.toFloat() / total }, modifier = Modifier.fillMaxWidth())
-                Text(listOfNotNull(
-                    if (total > 0) "VRAM %.1f / %.1f GB".format(used / 1024f, total / 1024f) else null,
-                    g.utilPct?.let { "carico $it%" },
-                    g.tempC?.let { "$it °C" },
-                ).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-            }
-            val models = sys.ollamaModels
+            Spacer(Modifier.width(12.dp))
             Text(
                 when {
-                    models == null -> "Ollama spento"
-                    models.isEmpty() -> "Nessun modello Ollama in memoria"
-                    else -> "In memoria: " + models.joinToString { "${it.name} (%.1f GB)".format(it.sizeVramMiB / 1024f) }
+                    ssh?.running == true -> "PowerShell del PC via SSH come ${ssh.user}, con la chiave del telefono e solo attraverso Tailscale."
+                    ssh?.installed == true -> "Il server SSH è installato ma spento: avvialo dal terminale qui sotto con «Start-Service sshd»."
+                    else -> "Per il terminale vero lancia una volta boot\\installa-ssh.ps1 sul PC con la chiave pubblica del telefono."
                 },
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
             )
-            OutlinedButton(onClick = onFree, enabled = !busy) {
-                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Libera VRAM")
-            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (ssh?.running == true) Button(onClick = { onSsh(ssh) }) { Text("Apri SSH") }
+            OutlinedButton(onClick = onQuick) { Text("Comandi rapidi") }
+        }
+    }
+}
+
+/**
+ * Apre il client SSH del telefono (Termius, JuiceSSH, ConnectBot...) con ssh://utente@pc:porta.
+ * Se nessuna app sa aprirlo, copia il comando, da incollare per esempio in Termux.
+ */
+private fun openSsh(context: Context, ssh: SshInfo, agentUrl: String, vm: MainViewModel) {
+    val host = resolveOpenUrl("{host}", agentUrl)
+    val uri = Uri.parse("ssh://${Uri.encode(ssh.user)}@$host:${ssh.port}")
+    val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val ok = runCatching { context.startActivity(intent) }.isSuccess
+    if (!ok) {
+        val cmd = "ssh ${ssh.user}@$host" + if (ssh.port != 22) " -p ${ssh.port}" else ""
+        val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clip.setPrimaryClip(ClipData.newPlainText("ssh", cmd))
+        vm.showMessage("Nessuna app SSH trovata: ho copiato «$cmd» (incollalo in Termux o installa Termius)")
+    }
+}
+
+/** Apre l'app Claude (dove si vede la sessione col controllo remoto) o, se manca, claude.ai/code. */
+private fun openClaudeApp(context: Context) {
+    val app = context.packageManager.getLaunchIntentForPackage("com.anthropic.claude")
+    val intent = app ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://claude.ai/code"))
+    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+@Composable
+private fun GpuCard(sys: SystemInfo, busy: Boolean, onFree: () -> Unit) {
+    Panel("GPU e modelli") {
+        val gpus = sys.gpus
+        if (gpus.isNullOrEmpty()) {
+            Text("Dati non disponibili (nvidia-smi non risponde)", style = MaterialTheme.typography.bodySmall)
+        }
+        gpus?.forEach { g ->
+            val used = g.memUsedMiB ?: 0
+            val total = g.memTotalMiB ?: 0
+            Text(g.name, style = MaterialTheme.typography.bodyMedium)
+            if (total > 0) Bar(used.toFloat() / total, levelColor(used.toFloat() / total, 0.85f, 0.95f))
+            Text(listOfNotNull(
+                if (total > 0) "VRAM %.1f / %.1f GB".format(used / 1024f, total / 1024f) else null,
+                g.utilPct?.let { "carico $it%" },
+                g.tempC?.let { "$it °C" },
+            ).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        val models = sys.ollamaModels
+        Text(
+            when {
+                models == null -> "Ollama spento"
+                models.isEmpty() -> "Nessun modello Ollama in memoria"
+                else -> "In memoria: " + models.joinToString { "${it.name} (%.1f GB)".format(it.sizeVramMiB / 1024f) }
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedButton(onClick = onFree, enabled = !busy) {
+            if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Libera VRAM")
         }
     }
 }
@@ -244,7 +359,8 @@ private fun GpuCard(sys: SystemInfo, busy: Boolean, onFree: () -> Unit) {
 @Composable
 private fun AppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainViewModel) {
     val context = LocalContext.current
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Dot(when { app.isRunning -> Green; app.isBusy -> Amber; else -> Grey })
@@ -279,7 +395,8 @@ private fun AppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainVie
 @Composable
 private fun UserAppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainViewModel) {
     val context = LocalContext.current
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Dot(when { app.isRunning -> Green; app.isBusy || busy -> Amber; else -> Grey })

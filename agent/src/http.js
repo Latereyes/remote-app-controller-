@@ -69,7 +69,7 @@ const userApp = (a) => ({ id: a.id, name: a.name, state: a.state, openUrl: a.ope
  * Dopo 10 tentativi sbagliati (token o password) in un minuto lo stesso indirizzo riceve 429.
  */
 export function createServer({ config, apps, system, gpu, users, getMode = () => null, requestGame = null,
-  displays = null, gaming = null, terminals = null, claude = null, approvals = null, log = console.log }) {
+  displays = null, gaming = null, ssh = null, terminals = null, claude = null, approvals = null, log = console.log }) {
   const failures = new Map();
   const trusted = config.trustedNets || ['100.64.0.0/10', 'fd7a:115c:a1e0::/48'];
   const need = (x, what) => { if (!x) throw Object.assign(new Error(`${what} non disponibile su questo agent`), { status: 501 }); return x; };
@@ -118,6 +118,8 @@ export function createServer({ config, apps, system, gpu, users, getMode = () =>
     // Schermi accesi e quale sta guardando Moonlight; dati per il pannello gioco
     ['GET', /^\/api\/displays$/, () => need(displays, 'Monitor')()],
     ['GET', /^\/api\/gaming$/, () => need(gaming, 'Modalità gioco')()],
+    // Server SSH del PC (terminale vero col client del telefono)
+    ['GET', /^\/api\/ssh$/, () => need(ssh, 'SSH')()],
     // Terminale sul PC: solo amministratore e solo da Tailscale (o dal PC stesso). Ogni comando finisce nel log.
     ['POST', /^\/api\/terminal$/, (m, url, req, who) => need(terminals, 'Terminale').open(who.name), { vpn: true }],
     ['GET', /^\/api\/terminal\/([A-Za-z0-9_-]+)$/, (m, url) => need(terminals, 'Terminale').read(m[1], Number(url.searchParams.get('since') || 0), Number(url.searchParams.get('wait') || 0)), { vpn: true }],

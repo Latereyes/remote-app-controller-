@@ -211,3 +211,14 @@ test('rotte nuove: permessi dal PC senza token, decisione dall\'app, terminale e
     server.close();
   }
 });
+
+test('SSH: stato del servizio e porta', async () => {
+  const { parseScQuery, parsePort, createSsh } = await import('../src/ssh.js');
+  assert.deepEqual(parseScQuery('SERVICE_NAME: sshd\r\n        STATE              : 4  RUNNING\r\n'), { installed: true, running: true });
+  assert.deepEqual(parseScQuery('        STATE              : 1  STOPPED\r\n'), { installed: true, running: false });
+  assert.deepEqual(parseScQuery('[SC] OpenService FAILED 1060:'), { installed: false, running: false });
+  assert.equal(parsePort('#Port 22\nPort 2222\n'), 2222);
+  assert.equal(parsePort('#Port 22\n'), 22);
+  const ssh = createSsh({ platform: 'win32', programData: os.tmpdir(), exec: async () => { throw Object.assign(new Error('exit 1060'), { stdout: '[SC] OpenService FAILED 1060' }); } });
+  assert.equal((await ssh()).installed, false);
+});

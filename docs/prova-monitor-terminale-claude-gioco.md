@@ -32,11 +32,25 @@ irm http://127.0.0.1:7070/api/gaming   -Headers $h | ConvertTo-Json -Depth 5
 irm http://127.0.0.1:7070/api/claude   -Headers $h
 ```
 
-## 2. Installare l'APK
+## 2. Terminale vero: SSH con la chiave del telefono
+
+Una volta sola.
+
+1. **Sul telefono** crea una chiave SSH nel client che preferisci: Termius o JuiceSSH (si aprono anche dal tasto dell'app), oppure Termux con `ssh-keygen -t ed25519`. Copia la **chiave pubblica**, la riga che comincia con `ssh-ed25519`.
+2. **Sul PC**, PowerShell **come amministratore**, nella cartella `C:\AI\remote-app-controller\boot`:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File installa-ssh.ps1 -ChiavePubblica "ssh-ed25519 AAAA... pixel"
+   ```
+   Lo script installa OpenSSH Server di Windows e lo fa partire con il PC. Accetta solo la chiave, mai la password, e apre la porta 22 solo agli indirizzi Tailscale. All'ingresso si apre PowerShell. Rilancialo con un'altra chiave per aggiungere un altro telefono. Con `-Disattiva` spegni tutto.
+3. **Nell'app**, pannello «Terminale del PC» > **Apri SSH**: si apre il client SSH con `ssh://andre@<PC>:22`. Se sul telefono non c'è un'app che apre questi link, il comando viene copiato e lo incolli in Termux.
+
+«Comandi rapidi» resta disponibile: è la shell dentro l'app, utile per un comando al volo.
+
+## 3. Installare l'APK
 
 Dal Pixel: release **android-latest** della repository, `PC-Remoto.apk`, installa sopra la versione attuale. Alla prima pressione di «Avvia Claude» l'app chiede il permesso per le notifiche: consentilo.
 
-## 3. Cosa provare
+## 4. Cosa provare
 
 | # | Prova | Risultato atteso |
 |---|---|---|
@@ -44,8 +58,10 @@ Dal Pixel: release **android-latest** della repository, `PC-Remoto.apk`, install
 | 2 | Collegati con Moonlight dalla Deck | sul monitor che trasmette compare **MOONLIGHT**; in alto «in stream con Moonlight» |
 | 3 | TV spenta, avvio dal Deck | resta acceso solo «VDD by MTT (virtuale)» con MOONLIGHT |
 | 4 | Apri un gioco Steam e guarda **Modalità gioco** | nome del gioco, carico GPU, temperatura, watt, frequenze, VRAM, encoder, CPU, RAM; si aggiorna ogni 2 s |
-| 5 | **Terminale** → `nvidia-smi` o i tasti rapidi | output nella schermata; le lettere accentate si leggono bene |
-| 6 | Terminale col telefono sul Wi-Fi di casa **senza** Tailscale (indirizzo 192.168.1.x) | errore «solo attraverso Tailscale» |
+| 5 | **Apri SSH** | il client SSH entra senza password in PowerShell del PC; da `Get-Process`, `nvidia-smi`, `claude`... funziona tutto, anche i programmi interattivi |
+| 5b | SSH dal Wi-Fi di casa con l'indirizzo 192.168.1.x | rifiutato (porta aperta solo a Tailscale) |
+| 5c | **Comandi rapidi** → `nvidia-smi` | output nella schermata; le lettere accentate si leggono bene |
+| 6 | Comandi rapidi col telefono sul Wi-Fi di casa **senza** Tailscale (indirizzo 192.168.1.x) | errore «solo attraverso Tailscale» |
 | 7 | **Avvia Claude** | sul PC si apre la finestra «Claude remoto»; nell'app Claude compare la sessione «PC di casa» |
 | 8 | Dall'app Claude chiedi un comando PowerShell che vuole il permesso | in PC Remoto arriva il pannello **Permessi richiesti** e una notifica con Consenti / Rifiuta; la risposta sblocca Claude |
 | 9 | Nessuna risposta per 10 minuti | la domanda torna nel terminale e nell'app Claude come sempre |

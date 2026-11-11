@@ -1,6 +1,9 @@
 package it.latereyes.remotecontroller.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import it.latereyes.remotecontroller.data.SshInfo
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,7 +14,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material.icons.filled.Build
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -131,7 +133,9 @@ fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit, onUser
                     // Prima le domande che aspettano una risposta, poi il gioco se si sta giocando
                     if (state.approvals.isNotEmpty()) item { ApprovalsPanel(state.approvals, state.busy, onDecide = vm::decide) }
                     if (state.showGaming) state.gaming?.let { g -> item { GamingPanel(g) } }
-                    item { QuickActions(onTerminal = onTerminal, terminalReady = state.claude != null || state.displays != null) }
+                    if (state.ssh != null || state.claude != null) item {
+                        TerminalPanel(state.ssh, onSsh = { ssh -> openSsh(context, ssh, state.settings.agentUrl, vm) }, onQuick = onTerminal)
+                    }
                     state.claude?.let { c ->
                         item {
                             ClaudePanel(c, busy = "claude" in state.busy, onStart = {
@@ -261,29 +265,54 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
     }
 }
 
-/** Scorciatoie dell'amministratore: per ora il terminale (Claude ha il suo pannello). */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Terminale del PC: quello vero è SSH (client del telefono con la chiave, solo via Tailscale);
+ * «Comandi rapidi» è la shell dentro l'app, comoda per un comando al volo senza client SSH.
+ */
 @Composable
-private fun QuickActions(onTerminal: () -> Unit, terminalReady: Boolean) {
-    if (!terminalReady) return
-    Card(
-        onClick = onTerminal,
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun TerminalPanel(ssh: SshInfo?, onSsh: (SshInfo) -> Unit, onQuick: () -> Unit) {
+    Panel("Terminale del PC", trailing = {
+        when {
+            ssh?.running == true -> Pill("ssh attivo", Green)
+            ssh?.installed == true -> Pill("ssh spento", Amber)
+            else -> Pill("ssh da attivare", Grey)
+        }
+    }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
                 Text(">_", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Terminale", style = MaterialTheme.typography.titleMedium)
-                Text("PowerShell sul PC, solo attraverso Tailscale", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(Icons.Default.Build, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                when {
+                    ssh?.running == true -> "PowerShell del PC via SSH come ${ssh.user}, con la chiave del telefono e solo attraverso Tailscale."
+                    ssh?.installed == true -> "Il server SSH è installato ma spento: avvialo dal terminale qui sotto con «Start-Service sshd»."
+                    else -> "Per il terminale vero lancia una volta boot\\installa-ssh.ps1 sul PC con la chiave pubblica del telefono."
+                },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
+            )
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (ssh?.running == true) Button(onClick = { onSsh(ssh) }) { Text("Apri SSH") }
+            OutlinedButton(onClick = onQuick) { Text("Comandi rapidi") }
+        }
+    }
+}
+
+/**
+ * Apre il client SSH del telefono (Termius, JuiceSSH, ConnectBot...) con ssh://utente@pc:porta.
+ * Se nessuna app sa aprirlo, copia il comando, da incollare per esempio in Termux.
+ */
+private fun openSsh(context: Context, ssh: SshInfo, agentUrl: String, vm: MainViewModel) {
+    val host = resolveOpenUrl("{host}", agentUrl)
+    val uri = Uri.parse("ssh://${Uri.encode(ssh.user)}@$host:${ssh.port}")
+    val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val ok = runCatching { context.startActivity(intent) }.isSuccess
+    if (!ok) {
+        val cmd = "ssh ${ssh.user}@$host" + if (ssh.port != 22) " -p ${ssh.port}" else ""
+        val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clip.setPrimaryClip(ClipData.newPlainText("ssh", cmd))
+        vm.showMessage("Nessuna app SSH trovata: ho copiato «$cmd» (incollalo in Termux o installa Termius)")
     }
 }
 

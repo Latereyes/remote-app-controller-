@@ -248,6 +248,16 @@ data class GamingInfo(
     }
 }
 
+/** Server SSH del PC (GET /api/ssh): il terminale vero si apre col client SSH del telefono. */
+data class SshInfo(val installed: Boolean, val running: Boolean, val user: String, val port: Int) {
+    companion object {
+        fun fromJson(text: String): SshInfo {
+            val o = JSONObject(text)
+            return SshInfo(o.optBoolean("installed"), o.optBoolean("running"), o.optString("user"), o.optInt("port", 22))
+        }
+    }
+}
+
 /** Claude sul PC (GET /api/claude). */
 data class ClaudeStatus(val running: Boolean, val startedAt: Long?, val name: String, val cwd: String, val approvals: Boolean, val pending: Int) {
     companion object {

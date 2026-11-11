@@ -10,6 +10,7 @@ import { UserStore } from './src/users.js';
 import { createModeControl } from './src/mode.js';
 import { createDisplays } from './src/displays.js';
 import { createGaming } from './src/gaming.js';
+import { createSsh } from './src/ssh.js';
 import { TerminalManager } from './src/terminal.js';
 import { ApprovalQueue } from './src/approvals.js';
 import { createClaude } from './src/claude.js';
@@ -50,12 +51,13 @@ gpu.on('state', (s) => {
 const bootDir = path.join(root, '..', 'boot');
 const displays = createDisplays({ bootDir });
 const gaming = createGaming({ bootDir });
+const ssh = createSsh();
 const terminals = config.terminal.enabled
   ? new TerminalManager({ cwd: config.terminal.cwd, ...(config.terminal.shell ? { shell: config.terminal.shell } : {}) })
   : null;
 const approvals = new ApprovalQueue({ timeoutMs: config.claude.approvalTimeoutSec * 1000 });
 const claude = config.claude.enabled ? createClaude({ config, stateDir: path.dirname(configFile), approvals }) : null;
-const server = createServer({ config, apps, system, gpu, users, getMode: mode.get, requestGame: mode.requestGame, displays, gaming, terminals, claude, approvals });
+const server = createServer({ config, apps, system, gpu, users, getMode: mode.get, requestGame: mode.requestGame, displays, gaming, ssh, terminals, claude, approvals });
 
 server.listen(config.port, config.host, () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i?.family === 'IPv4' && !i.internal).map((i) => i.address);

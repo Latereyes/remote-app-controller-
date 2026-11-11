@@ -1,4 +1,4 @@
-<#
+﻿<#
   Chiede un permesso all'app PC Remoto da uno script PowerShell sul PC e aspetta la risposta.
   Esce con 0 se Andrea consente, 1 se rifiuta, 2 se nessuno risponde o l'agent è spento.
 

@@ -66,6 +66,7 @@ Le rotte vogliono `Authorization: Bearer <token>`: il token di sessione dato da 
 | `POST /api/system/shutdown` · `restart` · `sleep` | alimentazione (parte dopo 1,5 s) |
 | `GET /api/displays` | schermi (MultiMonitorTool): acceso, principale, virtuale, risoluzione, e quale sta guardando Moonlight (log e `sunshine.conf` di Sunshine) |
 | `GET /api/gaming` | per giocare: GPU dettagliata (`nvidia-smi`: carico, °C, watt, frequenze, ventole, VRAM, encoder, freni), CPU, RAM, gioco Steam aperto, stream di Moonlight |
+| `GET /api/ssh` | server SSH del PC (`boot/installa-ssh.ps1`): installato, acceso, utente e porta, per il tasto «Apri SSH» |
 | `POST /api/terminal` · `GET /api/terminal/:id?since=&wait=` · `POST …/input` · `DELETE` | 🔒 terminale PowerShell sul PC (si chiude dopo 15 min senza uso) |
 | `GET /api/claude` · `POST /api/claude/start` · `stop` | 🔒 Claude Code con il controllo remoto, in una finestra sul PC |
 | `GET /api/approvals` · `POST /api/approvals/:id/decide` | 🔒 richieste di permesso in attesa; `{ allow: true\|false }` |

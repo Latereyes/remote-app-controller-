@@ -11,6 +11,7 @@ import it.latereyes.remotecontroller.data.Approval
 import it.latereyes.remotecontroller.data.ClaudeStatus
 import it.latereyes.remotecontroller.data.DisplaysInfo
 import it.latereyes.remotecontroller.data.GamingInfo
+import it.latereyes.remotecontroller.data.SshInfo
 import it.latereyes.remotecontroller.data.Login
 import it.latereyes.remotecontroller.data.Me
 import it.latereyes.remotecontroller.data.RelayClient
@@ -54,6 +55,7 @@ data class UiState(
     val displays: DisplaysInfo? = null,
     val gaming: GamingInfo? = null,
     val claude: ClaudeStatus? = null,
+    val ssh: SshInfo? = null,
     val approvals: List<Approval> = emptyList(),
     val terminal: TerminalView? = null,
 ) {
@@ -87,6 +89,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { refresh() }
     }
 
+    fun showMessage(text: String) = _state.update { it.copy(message = text) }
     fun dismissMessage() = _state.update { it.copy(message = null) }
     fun closeLogs() = _state.update { it.copy(logs = null) }
 
@@ -136,7 +139,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 it.copy(
                     settings = store.load(), pc = PcState.ONLINE, mode = mode, user = me, apps = apps,
                     system = extra.system ?: it.system.takeIf { me.isAdmin },
-                    displays = extra.displays, gaming = extra.gaming, claude = extra.claude, approvals = extra.approvals,
+                    displays = extra.displays, gaming = extra.gaming, claude = extra.claude, ssh = extra.ssh, approvals = extra.approvals,
                     lastUpdate = System.currentTimeMillis(),
                 )
             }
@@ -153,6 +156,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val displays: DisplaysInfo? = null,
         val gaming: GamingInfo? = null,
         val claude: ClaudeStatus? = null,
+        val ssh: SshInfo? = null,
         val approvals: List<Approval> = emptyList(),
     )
 
@@ -162,8 +166,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val displays = async { runCatching { client.displays() }.getOrNull() }
         val gaming = async { runCatching { client.gaming() }.getOrNull() }
         val claude = async { runCatching { client.claude() }.getOrNull() }
+        val ssh = async { runCatching { client.ssh() }.getOrNull() }
         val approvals = async { runCatching { client.approvals() }.getOrDefault(emptyList()) }
-        AdminData(system.await(), displays.await(), gaming.await(), claude.await(), approvals.await())
+        AdminData(system.await(), displays.await(), gaming.await(), claude.await(), ssh.await(), approvals.await())
     }
 
     private fun signedOut(message: String?) {

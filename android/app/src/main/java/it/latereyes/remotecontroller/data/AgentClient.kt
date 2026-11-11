@@ -122,6 +122,8 @@ class AgentClient(private val baseUrl: String, private val token: String) {
 
     suspend fun gaming(): GamingInfo = GamingInfo.fromJson(request(baseUrl, "/api/gaming", token, timeoutMs = 10000))
 
+    suspend fun ssh(): SshInfo = SshInfo.fromJson(request(baseUrl, "/api/ssh", token))
+
     suspend fun claude(): ClaudeStatus = ClaudeStatus.fromJson(request(baseUrl, "/api/claude", token))
 
     suspend fun startClaude(): ClaudeStatus = ClaudeStatus.fromJson(request(baseUrl, "/api/claude/start", token, "POST", timeoutMs = 20000))

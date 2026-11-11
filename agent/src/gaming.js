@@ -70,7 +70,7 @@ export function parseRegValue(text, name) {
 }
 
 /** Dati per il pannello «gioco»: GPU dettagliata, CPU, RAM, gioco di Steam aperto, stream di Moonlight. */
-export function createGaming({ bootDir, exec = execFileP, platform = process.platform } = {}) {
+export function createGaming({ bootDir, fps = null, getMode = () => null, exec = execFileP, platform = process.platform } = {}) {
   let fields = FULL_FIELDS;
   let lastCpu = os.cpus();
 
@@ -111,8 +111,11 @@ export function createGaming({ bootDir, exec = execFileP, platform = process.pla
     const cpuPct = cpuPercent(lastCpu, now);
     lastCpu = now;
     const stream = sunshineStatus(bootDir);
+    const active = !!game || stream.streaming;
+    // PresentMon si accende solo quando si gioca (gioco di Steam, stream o modalità Xbox), non a ogni controllo dell'app
+    const wantFps = fps && (active || getMode() === 'xbox');
     return {
-      active: !!game || stream.streaming,
+      active,
       game,
       stream,
       cpuPct,
@@ -120,6 +123,8 @@ export function createGaming({ bootDir, exec = execFileP, platform = process.pla
       cpuThreads: now.length,
       memory: { totalMiB: Math.round(os.totalmem() / 1048576), freeMiB: Math.round(os.freemem() / 1048576) },
       gpu: gpus,
+      // FPS del gioco con PresentMon (null se disattivato in config.json)
+      fps: wantFps ? fps.read() : (fps ? { available: true, running: false, idle: true } : null),
     };
   };
 }

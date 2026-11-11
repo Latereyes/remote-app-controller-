@@ -23,6 +23,17 @@ val Red = Color(0xFFEF5350)
 val GameAccent = Color(0xFF8B7CF6)
 val ClaudeAccent = Color(0xFFD97757)
 val ScreenAccent = Color(0xFF4FB3E8)
+// Motori AI (Ollama, ComfyUI): blu, tutti uguali, perché si dividono la stessa GPU
+val EngineAccent = Color(0xFF5B8DEF)
+// Le app hanno ognuna il suo colore, così si riconoscono a colpo d'occhio
+val AppColors = mapOf(
+    "chatbz" to Color(0xFFEC6FA9),
+    "localai" to Color(0xFF9ACD4C),
+    "japonika" to Color(0xFFF2734B),
+)
+private val SpareColors = listOf(Color(0xFF4DB6AC), Color(0xFFFFB74D), Color(0xFF7986CB), Color(0xFFBA68C8))
+fun appColor(id: String, engine: Boolean): Color =
+    if (engine) EngineAccent else AppColors[id] ?: SpareColors[Math.floorMod(id.hashCode(), SpareColors.size)]
 
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF5EE0B0),

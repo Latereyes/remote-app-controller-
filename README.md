@@ -26,6 +26,9 @@ Al primo avvio crea `agent/config.json` dall'esempio e stampa il **token** da in
 | ComfyUI | `venv\Scripts\python.exe main.py` + argomenti di Stability Matrix | `C:\IA\Packages\ComfyUI` |
 | ChatBz | `start.bat` | `%USERPROFILE%\Documents\NEW CHATBZ\ChatBz2` |
 | LocalAI | `start.bat` | `%USERPROFILE%\Documents\LocalAI` |
+| Japonika | `node server.mjs` (porta 8765, dal telefono via `tailscale serve` sulla 8445) | `C:\AI\JAPONIKA\app` |
+
+`kind` divide le app in due gruppi nell'app Android: `engine` (Ollama e ComfyUI, i motori che si dividono la GPU) e `app` (il resto). Se manca, Ollama e ComfyUI sono motori e le altre app.
 
 Ogni app ha un URL `health`: se risponde, l'app è considerata accesa (anche se l'ha avviata qualcun altro). `requires` avvia prima le dipendenze (ChatBz e LocalAI accendono Ollama e ComfyUI). `stop.url` è la chiusura gentile; se manca o non basta, l'agent chiude il processo con tutti i figli.
 
@@ -99,7 +102,8 @@ Si entra con nome e password (vedi *Utenti e accesso*). Gli utenti normali vedon
 Cosa fa (per l'amministratore):
 - mostra se il PC è acceso, spento o in accensione, e lo accende tramite il relay del telefono di casa (`POST /wake`);
 - **Accendi per giocare (Steam Deck)**: accende il PC come sopra, e appena l'agent risponde gli chiede di restare in modalità Xbox (`POST /api/mode/game`), così Ollama e ComfyUI non partono e si gioca da Moonlight. Se il PC è già acceso in modalità server, **Passa a modalità gioco** chiude le app del countdown (`serverApps`) e torna in modalità Xbox;
-- elenca Ollama, ComfyUI, ChatBz e LocalAI con il loro stato, li avvia e li ferma, mostra i log e apre ChatBz o LocalAI nel browser;
+- elenca in due gruppi i **motori AI** (Ollama e ComfyUI, schede blu) e le **app** (ChatBz, LocalAI, Japonika, ognuna col suo colore) con il loro stato, le avvia e le ferma, mostra i log e le apre nel browser;
+- nel pannello **Modalità gioco** mostra gli **FPS** del gioco (media, 1% low, tempo per frame) misurati con PresentMon: va installato una volta con `boot\installa-presentmon.ps1` (vedi `docs/prova-fps-app-japonika.md`);
 - mostra VRAM, carico e temperatura della GPU e i modelli Ollama in memoria, con il pulsante "Libera VRAM";
 - spegne, riavvia o sospende il PC (con conferma).
 

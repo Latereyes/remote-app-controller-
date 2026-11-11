@@ -127,3 +127,31 @@ fun Bar(fraction: Float, color: Color, modifier: Modifier = Modifier) {
         Box(Modifier.fillMaxWidth(animated).height(8.dp).clip(RoundedCornerShape(4.dp)).background(color))
     }
 }
+
+/** Quadratino con l'iniziale dell'app nel suo colore. */
+@Composable
+fun AppBadge(text: String, color: Color, size: Dp = 40.dp) {
+    Box(Modifier.size(size).clip(MaterialTheme.shapes.medium).background(color.copy(alpha = 0.20f)), contentAlignment = Alignment.Center) {
+        Text(text, color = color, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.42f).sp, maxLines = 1)
+    }
+}
+
+/** Sigla dell'app: un carattere giapponese per Japonika, altrimenti le prime due lettere del nome. */
+fun appMonogram(id: String, name: String): String = when (id) {
+    "japonika" -> "日"
+    "comfy" -> "Cf"
+    else -> name.filter { it.isLetterOrDigit() }.take(2).ifEmpty { "?" }
+}
+
+/** Titolo di una sezione della lista (Motori AI, App) con una riga di spiegazione. */
+@Composable
+fun SectionHeader(title: String, subtitle: String?, color: Color) {
+    Row(Modifier.padding(top = 6.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(color))
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, color = color)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}

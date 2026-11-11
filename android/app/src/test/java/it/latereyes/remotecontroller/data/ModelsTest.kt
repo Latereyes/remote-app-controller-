@@ -25,6 +25,28 @@ class ModelsTest {
         assertNull(apps[1].openUrl)
         assertNull(apps[1].port)
         assertEquals("non risponde", apps[1].lastError)
+        // Agent senza «kind»: Ollama è un motore, ChatBz un'app
+        assertFalse(apps[0].isEngine)
+        assertTrue(apps[1].isEngine)
+        val j = AppStatus.listFromJson("""[{"id":"japonika","name":"Japonika","kind":"app","state":"running"},{"id":"x","kind":"engine"}]""")
+        assertFalse(j[0].isEngine)
+        assertTrue(j[1].isEngine)
+    }
+
+    @Test
+    fun fpsFromGamingJson() {
+        val g = GamingInfo.fromJson(
+            """{"active":true,"game":null,"stream":{},"memory":{"totalMiB":1,"freeMiB":1},"gpu":[],
+                "fps":{"available":true,"running":true,"warming":false,"game":{"process":"Game.exe","pid":7,"presentMode":"Hardware: Independent Flip"},
+                       "fps":143,"low1":98,"frameTimeMs":6.99,"worstMs":12.1,"displayedFps":141,"others":[]}}"""
+        )
+        assertEquals(143, g.fps!!.fps)
+        assertEquals("Game.exe", g.fps!!.process)
+        assertEquals(98, g.fps!!.low1)
+        val missing = GamingInfo.fromJson("""{"fps":{"available":false,"reason":"PresentMon non installato"}}""")
+        assertFalse(missing.fps!!.available)
+        assertNull(missing.fps!!.fps)
+        assertNull(GamingInfo.fromJson("{}").fps)
     }
 
     @Test

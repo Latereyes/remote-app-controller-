@@ -14,9 +14,12 @@ data class AppStatus(
     val openUrl: String?,
     val requires: List<String>,
     val lastError: String?,
+    /** «engine» per i motori AI (Ollama, ComfyUI), «app» per il resto (ChatBz, LocalAI, Japonika...). */
+    val kind: String = "app",
 ) {
     val isRunning get() = state == "running"
     val isBusy get() = state == "starting" || state == "stopping"
+    val isEngine get() = kind == "engine"
 
     companion object {
         fun fromJson(o: JSONObject) = AppStatus(
@@ -28,6 +31,8 @@ data class AppStatus(
             openUrl = o.optStringOrNull("openUrl"),
             requires = o.optJSONArray("requires").strings(),
             lastError = o.optStringOrNull("lastError"),
+            // Agent vecchio senza «kind»: Ollama e ComfyUI sono comunque motori
+            kind = o.optStringOrNull("kind") ?: if (o.getString("id") in setOf("ollama", "comfy")) "engine" else "app",
         )
 
         fun listFromJson(text: String): List<AppStatus> {
@@ -200,6 +205,39 @@ data class GpuDetail(
 
 data class GameInfo(val appId: Long, val name: String)
 
+/** FPS del gioco misurati da PresentMon sul PC. `available` false = PresentMon manca o non ha i permessi (`reason`). */
+data class FpsInfo(
+    val available: Boolean,
+    val running: Boolean,
+    val idle: Boolean,
+    val reason: String?,
+    val process: String?,
+    val fps: Int?,
+    val low1: Int?,
+    val frameTimeMs: Double?,
+    val displayedFps: Int?,
+    val presentMode: String?,
+) {
+    companion object {
+        fun fromJson(o: JSONObject?): FpsInfo? {
+            if (o == null) return null
+            val game = o.optJSONObject("game")
+            return FpsInfo(
+                available = o.optBoolean("available"),
+                running = o.optBoolean("running"),
+                idle = o.optBoolean("idle"),
+                reason = o.optStringOrNull("reason"),
+                process = game?.optStringOrNull("process"),
+                fps = o.optIntOrNull("fps"),
+                low1 = o.optIntOrNull("low1"),
+                frameTimeMs = o.optDoubleOrNull("frameTimeMs"),
+                displayedFps = o.optIntOrNull("displayedFps"),
+                presentMode = game?.optStringOrNull("presentMode"),
+            )
+        }
+    }
+}
+
 data class GamingInfo(
     val active: Boolean,
     val game: GameInfo?,
@@ -209,6 +247,7 @@ data class GamingInfo(
     val memTotalMiB: Int,
     val memFreeMiB: Int,
     val gpus: List<GpuDetail>,
+    val fps: FpsInfo? = null,
 ) {
     companion object {
         fun fromJson(text: String): GamingInfo {
@@ -243,6 +282,7 @@ data class GamingInfo(
                         throttle = g.optJSONArray("throttle").strings(),
                     )
                 },
+                fps = FpsInfo.fromJson(o.optJSONObject("fps")),
             )
         }
     }

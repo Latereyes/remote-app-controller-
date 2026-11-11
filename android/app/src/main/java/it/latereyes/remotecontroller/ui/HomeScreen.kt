@@ -15,7 +15,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -147,11 +151,21 @@ fun HomeScreen(state: UiState, vm: MainViewModel, onSettings: () -> Unit, onUser
                     state.displays?.let { d -> item { DisplaysPanel(d) } }
                     state.system?.let { sys -> item { GpuCard(sys, busy = "gpu" in state.busy, onFree = vm::freeGpu) } }
                 }
-                item { Text(if (admin) "App" else "Le tue app", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp, start = 4.dp)) }
+                // Due gruppi distinti: i motori AI che usano la GPU (blu) e le app che ci girano sopra (ognuna col suo colore)
+                val engines = state.apps.filter { it.isEngine }
+                val others = state.apps.filter { !it.isEngine }
+                if (engines.isNotEmpty()) {
+                    item { SectionHeader("Motori AI", "Si dividono la GPU: uno alla volta in memoria", EngineAccent) }
+                    items(engines, key = { it.id }) { app ->
+                        if (admin) AppCard(app, agentUrl = state.settings.agentUrl, busy = app.id in state.busy, vm = vm)
+                        else UserAppCard(app, agentUrl = state.settings.agentUrl, busy = app.id in state.busy, vm = vm)
+                    }
+                }
+                item { SectionHeader(if (admin) "App" else "Le tue app", if (admin) "Usano i motori qui sopra quando servono" else null, MaterialTheme.colorScheme.primary) }
                 if (!admin && state.apps.isEmpty()) {
                     item { Text("Nessuna app abilitata: chiedi ad Andrea.", style = MaterialTheme.typography.bodySmall) }
                 }
-                items(state.apps, key = { it.id }) { app ->
+                items(others, key = { it.id }) { app ->
                     if (admin) AppCard(app, agentUrl = state.settings.agentUrl, busy = app.id in state.busy, vm = vm)
                     else UserAppCard(app, agentUrl = state.settings.agentUrl, busy = app.id in state.busy, vm = vm)
                 }
@@ -359,34 +373,39 @@ private fun GpuCard(sys: SystemInfo, busy: Boolean, onFree: () -> Unit) {
 @Composable
 private fun AppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainViewModel) {
     val context = LocalContext.current
-    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Dot(when { app.isRunning -> Green; app.isBusy -> Amber; else -> Grey })
-                Spacer(Modifier.width(8.dp))
-                Text(app.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(stateLabel(app), style = MaterialTheme.typography.bodySmall)
-            }
-            app.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            if (app.requires.isNotEmpty() && !app.isRunning) {
-                Text("Avvia anche: ${app.requires.joinToString()}", style = MaterialTheme.typography.bodySmall)
-            }
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                when {
-                    busy || app.isBusy -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    }
-                    app.isRunning -> OutlinedButton(onClick = { vm.stop(app) }) { Text("Ferma") }
-                    else -> Button(onClick = { vm.start(app) }) { Text("Avvia") }
+    AppShell(app) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AppBadge(appMonogram(app.id, app.name), appColor(app.id, app.isEngine))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(app.name, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Dot(when { app.isRunning -> Green; app.isBusy -> Amber; else -> Grey })
+                    Spacer(Modifier.width(6.dp))
+                    Text(stateLabel(app), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (app.isRunning && app.openUrl != null) {
-                    OutlinedButton(onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(resolveOpenUrl(app.openUrl, agentUrl))))
-                    }) { Text("Apri") }
-                }
-                if (app.managed) TextButton(onClick = { vm.showLogs(app) }) { Text("Log") }
             }
+            if (app.isEngine) Pill("motore gpu", EngineAccent)
+            else app.port?.let { Text(":$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        app.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        if (app.requires.isNotEmpty() && !app.isRunning) {
+            Text("Avvia anche: ${app.requires.joinToString()}", style = MaterialTheme.typography.bodySmall)
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                busy || app.isBusy -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                }
+                app.isRunning -> OutlinedButton(onClick = { vm.stop(app) }) { Text("Ferma") }
+                else -> Button(onClick = { vm.start(app) }) { Text("Avvia") }
+            }
+            if (app.isRunning && app.openUrl != null) {
+                OutlinedButton(onClick = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(resolveOpenUrl(app.openUrl, agentUrl))))
+                }) { Text("Apri") }
+            }
+            if (app.managed) TextButton(onClick = { vm.showLogs(app) }) { Text("Log") }
         }
     }
 }
@@ -395,23 +414,44 @@ private fun AppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainVie
 @Composable
 private fun UserAppCard(app: AppStatus, agentUrl: String, busy: Boolean, vm: MainViewModel) {
     val context = LocalContext.current
-    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Dot(when { app.isRunning -> Green; app.isBusy || busy -> Amber; else -> Grey })
-                Spacer(Modifier.width(8.dp))
-                Text(app.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(when { app.isRunning -> "pronta"; app.isBusy || busy -> "si sta avviando…"; else -> "spenta" },
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            when {
-                busy || app.isBusy -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                app.isRunning -> if (app.openUrl != null) Button(onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(resolveOpenUrl(app.openUrl, agentUrl))))
-                }) { Text("Apri") }
-                else -> Button(onClick = { vm.start(app) }) { Text("Avvia") }
-            }
+    AppShell(app) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AppBadge(appMonogram(app.id, app.name), appColor(app.id, app.isEngine))
+            Spacer(Modifier.width(12.dp))
+            Text(app.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Dot(when { app.isRunning -> Green; app.isBusy || busy -> Amber; else -> Grey })
+            Spacer(Modifier.width(6.dp))
+            Text(when { app.isRunning -> "pronta"; app.isBusy || busy -> "si sta avviando…"; else -> "spenta" },
+                style = MaterialTheme.typography.bodySmall)
+        }
+        when {
+            busy || app.isBusy -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            app.isRunning -> if (app.openUrl != null) Button(onClick = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(resolveOpenUrl(app.openUrl, agentUrl))))
+            }) { Text("Apri") }
+            else -> Button(onClick = { vm.start(app) }) { Text("Avvia") }
+        }
+    }
+}
+
+/**
+ * Cornice delle schede delle app. I motori AI hanno il fondo sfumato di blu e il bordo blu;
+ * le app il fondo normale con una sottile striscia del loro colore a sinistra.
+ */
+@Composable
+private fun AppShell(app: AppStatus, content: @Composable () -> Unit) {
+    val color = appColor(app.id, app.isEngine)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = if (app.isEngine) BorderStroke(1.dp, color.copy(alpha = 0.45f)) else null,
+    ) {
+        val bg = if (app.isEngine) Brush.horizontalGradient(listOf(color.copy(alpha = 0.16f), Color.Transparent))
+        else Brush.horizontalGradient(listOf(color.copy(alpha = 0.07f), Color.Transparent))
+        Row(Modifier.background(bg).height(IntrinsicSize.Min)) {
+            if (!app.isEngine) Box(Modifier.width(4.dp).fillMaxHeight().background(color))
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
         }
     }
 }

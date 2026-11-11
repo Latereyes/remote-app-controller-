@@ -10,6 +10,7 @@ import { UserStore } from './src/users.js';
 import { createModeControl } from './src/mode.js';
 import { createDisplays } from './src/displays.js';
 import { createGaming } from './src/gaming.js';
+import { createFps } from './src/fps.js';
 import { createSsh } from './src/ssh.js';
 import { TerminalManager } from './src/terminal.js';
 import { ApprovalQueue } from './src/approvals.js';
@@ -50,7 +51,11 @@ gpu.on('state', (s) => {
 });
 const bootDir = path.join(root, '..', 'boot');
 const displays = createDisplays({ bootDir });
-const gaming = createGaming({ bootDir });
+// FPS dei giochi: PresentMon in tools\ (boot\installa-presentmon.ps1), acceso solo mentre si guarda il pannello gioco
+const fps = config.fps.enabled ? createFps({ exe: config.fps.presentmon || null, toolsDir: path.join(root, '..', 'tools') }) : null;
+const gaming = createGaming({ bootDir, fps, getMode: mode.get });
+process.on('exit', () => fps?.close());
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));
 const ssh = createSsh();
 const terminals = config.terminal.enabled
   ? new TerminalManager({ cwd: config.terminal.cwd, ...(config.terminal.shell ? { shell: config.terminal.shell } : {}) })

@@ -28,11 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.latereyes.remotecontroller.data.Approval
 import it.latereyes.remotecontroller.data.ClaudeStatus
 import it.latereyes.remotecontroller.data.DisplaysInfo
+import it.latereyes.remotecontroller.data.FpsInfo
 import it.latereyes.remotecontroller.data.GamingInfo
 
 /** Pannello «Modalità gioco»: gioco aperto, stream di Moonlight, GPU con indicatori, CPU e RAM. */
@@ -57,6 +59,7 @@ fun GamingPanel(g: GamingInfo) {
             Text("Stream dalle ${g.stream.since.substringAfter('T').take(5)}", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        FpsBlock(g.fps)
         g.gpus.forEach { gpu ->
             Text(gpu.name.removePrefix("NVIDIA ").removePrefix("GeForce "), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -102,9 +105,63 @@ fun GamingPanel(g: GamingInfo) {
             StatTile("RAM", "%.1f/%.0f GB".format(usedGb, g.memTotalMiB / 1024f), Modifier.weight(1.4f),
                 color = levelColor(if (g.memTotalMiB > 0) (g.memTotalMiB - g.memFreeMiB).toFloat() / g.memTotalMiB else 0f, 0.85f, 0.95f))
         }
-        Text("Gli FPS non si leggono senza un programma in più sul PC (PresentMon): qui ci sono i dati della scheda.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** Colore degli FPS: verde da 60 in su, giallo da 30, rosso sotto. */
+private fun fpsColor(fps: Int?) = when {
+    fps == null -> Grey
+    fps >= 60 -> Green
+    fps >= 30 -> Amber
+    else -> Red
+}
+
+/** Riquadro FPS (PresentMon sul PC): numero grande, 1% low, tempo per frame e processo misurato. */
+@Composable
+private fun FpsBlock(f: FpsInfo?) {
+    Column(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(GameAccent.copy(alpha = 0.10f)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        when {
+            f == null -> Text("FPS: l'agent sul PC va aggiornato per misurarli.", style = MaterialTheme.typography.bodySmall)
+            !f.available -> Text("FPS non disponibili: ${f.reason ?: "PresentMon non risponde"}", style = MaterialTheme.typography.bodySmall)
+            f.idle -> Text("Gli FPS si misurano appena parte un gioco.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            f.fps == null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = GameAccent)
+                Spacer(Modifier.width(10.dp))
+                Text("Misuro gli FPS… (nessun gioco sta disegnando frame)", style = MaterialTheme.typography.bodySmall)
+            }
+            else -> {
+                val fps = f.fps ?: 0
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("$fps", fontSize = 44.sp, fontWeight = FontWeight.Bold, color = fpsColor(fps))
+                    Spacer(Modifier.width(6.dp))
+                    Text("FPS", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp))
+                    Spacer(Modifier.weight(1f))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("1% low ${f.low1 ?: "–"}", style = MaterialTheme.typography.titleMedium, color = fpsColor(f.low1))
+                        f.frameTimeMs?.let { Text("%.1f ms per frame".format(it), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+                Text(listOfNotNull(
+                    f.process,
+                    // Se lo schermo ne mostra meno di quanti ne disegna il gioco (V-Sync, limite del monitor) lo si dice
+                    f.displayedFps?.takeIf { d -> fps - d > 3 }?.let { "$it mostrati" },
+                    f.presentMode?.let { presentModeLabel(it) },
+                ).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private fun presentModeLabel(mode: String) = when {
+    mode.contains("Independent Flip", ignoreCase = true) -> "schermo intero"
+    mode.contains("Composed", ignoreCase = true) -> "in finestra"
+    else -> mode
 }
 
 /** Pannello «Monitor»: quali schermi sono accesi e quale sta guardando Moonlight. */

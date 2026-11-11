@@ -18,7 +18,8 @@
       "processNames": [
         "ollama app.exe",
         "ollama.exe"
-      ]
+      ],
+      "kind": "engine"
     },
     {
       "id": "comfy",
@@ -36,7 +37,8 @@
       "cwd": "C:\\IA\\Packages\\ComfyUI",
       "health": "http://127.0.0.1:8188/system_stats",
       "port": 8188,
-      "startTimeoutSec": 180
+      "startTimeoutSec": 180,
+      "kind": "engine"
     },
     {
       "id": "chatbz",
@@ -52,7 +54,8 @@
       ],
       "stop": {
         "url": "http://127.0.0.1:3100/api/control/shutdown"
-      }
+      },
+      "kind": "app"
     },
     {
       "id": "localai",
@@ -65,7 +68,22 @@
       "requires": [
         "ollama",
         "comfy"
-      ]
+      ],
+      "kind": "app"
+    },
+    {
+      "id": "japonika",
+      "name": "Japonika",
+      "kind": "app",
+      "command": "node",
+      "args": [
+        "server.mjs"
+      ],
+      "cwd": "C:\\AI\\JAPONIKA\\app",
+      "health": "http://127.0.0.1:8765/",
+      "port": 8765,
+      "openUrl": "https://NOME-PC.TAILNET.ts.net:8445/",
+      "startTimeoutSec": 30
     }
   ],
   "power": {
@@ -98,5 +116,9 @@
     "name": "PC di casa",
     "approvals": true,
     "approvalTimeoutSec": 600
+  },
+  "fps": {
+    "enabled": true,
+    "presentmon": ""
   }
 }

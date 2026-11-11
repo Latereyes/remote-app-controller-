@@ -41,8 +41,16 @@ export async function killByName(names) {
 export async function pidOnPort(port) {
   if (!isWin || !port) return null;
   try {
-    const { stdout } = await execFileP('netstat', ['-ano', '-p', 'tcp']);
-    return parseNetstat(stdout, port);
+    const { stdout } = await execFileP('netstat', ['-ano', '-p', 'tcp'], { windowsHide: true });
+    const pid = parseNetstat(stdout, port);
+    if (pid) return pid;
+  } catch {}
+  // Windows in italiano scrive lo stato tradotto (e a volte strano): si chiede a PowerShell, che non dipende dalla lingua
+  try {
+    const { stdout } = await execFileP('powershell.exe', ['-NoProfile', '-Command',
+      `(Get-NetTCPConnection -LocalPort ${Number(port)} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess`], { windowsHide: true, timeout: 10000 });
+    const pid = Number(stdout.trim());
+    return pid > 0 ? pid : null;
   } catch {
     return null;
   }
@@ -51,7 +59,7 @@ export async function pidOnPort(port) {
 export function parseNetstat(text, port) {
   for (const line of text.split(/\r?\n/)) {
     const cols = line.trim().split(/\s+/);
-    if (cols.length < 5 || cols[0] !== 'TCP' || !/LISTEN/i.test(cols[3])) continue;
+    if (cols.length < 5 || cols[0] !== 'TCP' || !/LISTEN|ASCOLTO/i.test(cols[3])) continue;
     if (cols[1].endsWith(`:${port}`)) {
       const pid = Number(cols[4]);
       if (pid > 0) return pid;

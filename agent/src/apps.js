@@ -47,6 +47,7 @@ export class AppManager {
     return {
       id: app.id,
       name: app.name,
+      kind: app.kind || 'app',
       state,
       managed,
       pid: st.child?.pid ?? null,

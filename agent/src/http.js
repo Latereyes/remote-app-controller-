@@ -2,7 +2,7 @@ import http from 'node:http';
 import net from 'node:net';
 import { timingSafeEqual, createHash } from 'node:crypto';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const sha = (s) => createHash('sha256').update(String(s)).digest();
 
 /** Confronto del token a tempo costante. */
@@ -56,7 +56,7 @@ async function readJson(req) {
 const bearer = (header) => /^Bearer (.+)$/.exec(header || '')?.[1] || null;
 
 /** Quello che vede un utente normale di un'app: nome, se è accesa e il link per aprirla. Niente dati tecnici. */
-const userApp = (a) => ({ id: a.id, name: a.name, state: a.state, openUrl: a.openUrl });
+const userApp = (a) => ({ id: a.id, name: a.name, kind: a.kind, state: a.state, openUrl: a.openUrl });
 
 /**
  * Server HTTP dell'agent.

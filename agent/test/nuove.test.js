@@ -76,6 +76,18 @@ test('dati di gioco: nvidia-smi, CPU, Steam', async () => {
   assert.equal(d.active, true);
   await gaming();
   assert.equal(calls.filter(([c, a]) => c === 'nvidia-smi' && a.includes('encoder')).length, 1, 'il campo sconosciuto non si riprova');
+  assert.equal(d.fps, null, 'senza PresentMon configurato niente FPS');
+  // FPS: PresentMon si legge solo quando si gioca
+  let reads = 0;
+  const fps = { read: () => { reads++; return { available: true, running: true, fps: 60 }; } };
+  assert.equal((await createGaming({ bootDir: dir, exec, platform: 'win32', fps })()).fps.fps, 60);
+  const idleExec = async (cmd, args) => (cmd === 'nvidia-smi' ? exec(cmd, args) : { stdout: '    RunningAppID    REG_DWORD    0x0\n' });
+  const idle = await createGaming({ bootDir: dir, exec: idleExec, platform: 'win32', fps })();
+  assert.equal(idle.active, false);
+  assert.equal(idle.fps.idle, true);
+  assert.equal(reads, 1);
+  await createGaming({ bootDir: dir, exec: idleExec, platform: 'win32', fps, getMode: () => 'xbox' })();
+  assert.equal(reads, 2, 'in modalità Xbox si misura anche senza Steam');
 });
 
 test('permessi: chiedi, aspetta, decidi, scadenza', async () => {

@@ -153,15 +153,19 @@ export class AppManager {
           if (res.ok) await this.waitFor(id, false, this.#opts.stopTimeoutMs);
         } catch {}
       }
-      if (await this.#tools.probe(app.health) || st.child) {
-        if (st.child) await this.#tools.killTree(st.child.pid);
-        else if (app.processNames.length) await this.#tools.killByName(app.processNames);
-        else {
-          const pid = await this.#tools.pidOnPort(app.port);
-          if (pid && pid !== this.#opts.selfPid) await this.#tools.killTree(pid);
+      // Due tentativi: prova sul PC 2026-11-11, Japonika avviata fuori dall'agent si è chiusa solo al secondo «Ferma»
+      let down = false;
+      for (let attempt = 0; attempt < 2 && !down; attempt++) {
+        if (await this.#tools.probe(app.health) || st.child) {
+          if (st.child) await this.#tools.killTree(st.child.pid);
+          else if (app.processNames.length) await this.#tools.killByName(app.processNames);
+          else {
+            const pid = await this.#tools.pidOnPort(app.port);
+            if (pid && pid !== this.#opts.selfPid) await this.#tools.killTree(pid);
+          }
         }
+        down = await this.waitFor(id, false, attempt === 0 ? Math.min(5000, this.#opts.stopTimeoutMs) : this.#opts.stopTimeoutMs);
       }
-      const down = await this.waitFor(id, false, this.#opts.stopTimeoutMs);
       if (!down) {
         st.lastError = 'risponde ancora dopo la chiusura';
         throw new HttpError(500, `${app.name}: ${st.lastError}`);

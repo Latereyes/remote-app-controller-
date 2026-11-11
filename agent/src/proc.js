@@ -48,7 +48,7 @@ export async function pidOnPort(port) {
   // Windows in italiano scrive lo stato tradotto (e a volte strano): si chiede a PowerShell, che non dipende dalla lingua
   try {
     const { stdout } = await execFileP('powershell.exe', ['-NoProfile', '-Command',
-      `(Get-NetTCPConnection -LocalPort ${Number(port)} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess`], { windowsHide: true, timeout: 10000 });
+      `(Get-NetTCPConnection -LocalPort ${Number(port)} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess`], { windowsHide: true, timeout: 20000 });
     const pid = Number(stdout.trim());
     return pid > 0 ? pid : null;
   } catch {

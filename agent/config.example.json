@@ -86,5 +86,17 @@
       "powrprof.dll,SetSuspendState",
       "0,1,0"
     ]
+  },
+  "terminal": {
+    "enabled": true,
+    "cwd": "%USERPROFILE%"
+  },
+  "claude": {
+    "enabled": true,
+    "command": "claude",
+    "cwd": "C:\\AI",
+    "name": "PC di casa",
+    "approvals": true,
+    "approvalTimeoutSec": 600
   }
 }

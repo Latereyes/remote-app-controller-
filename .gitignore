@@ -10,3 +10,5 @@ boot/boot.log
 boot/mode.txt
 agent/*.log
 boot/game.txt
+agent/claude-stato.json
+agent/claude-impostazioni.json

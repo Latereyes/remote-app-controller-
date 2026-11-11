@@ -8,6 +8,11 @@ import { createServer } from './src/http.js';
 import { GpuArbiter } from './src/gpu.js';
 import { UserStore } from './src/users.js';
 import { createModeControl } from './src/mode.js';
+import { createDisplays } from './src/displays.js';
+import { createGaming } from './src/gaming.js';
+import { TerminalManager } from './src/terminal.js';
+import { ApprovalQueue } from './src/approvals.js';
+import { createClaude } from './src/claude.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configFile = process.env.AGENT_CONFIG ? path.resolve(process.env.AGENT_CONFIG) : path.join(root, 'config.json');
@@ -42,7 +47,15 @@ gpu.on('state', (s) => {
   if (key && key !== lastGpuLog) console.log(`  [gpu] ${key} (${s.owner || '-'}${s.queue.length ? `, ${s.queue.length} in coda` : ''})`);
   lastGpuLog = key;
 });
-const server = createServer({ config, apps, system, gpu, users, getMode: mode.get, requestGame: mode.requestGame });
+const bootDir = path.join(root, '..', 'boot');
+const displays = createDisplays({ bootDir });
+const gaming = createGaming({ bootDir });
+const terminals = config.terminal.enabled
+  ? new TerminalManager({ cwd: config.terminal.cwd, ...(config.terminal.shell ? { shell: config.terminal.shell } : {}) })
+  : null;
+const approvals = new ApprovalQueue({ timeoutMs: config.claude.approvalTimeoutSec * 1000 });
+const claude = config.claude.enabled ? createClaude({ config, stateDir: path.dirname(configFile), approvals }) : null;
+const server = createServer({ config, apps, system, gpu, users, getMode: mode.get, requestGame: mode.requestGame, displays, gaming, terminals, claude, approvals });
 
 server.listen(config.port, config.host, () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i?.family === 'IPv4' && !i.internal).map((i) => i.address);

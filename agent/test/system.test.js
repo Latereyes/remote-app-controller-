@@ -38,3 +38,18 @@ test('power esegue il comando configurato dopo la risposta', async () => {
   assert.deepEqual(ran, [['shutdown', ['/s', '/t', '5']]]);
   assert.throws(() => sys.power('formatta'), /sconosciuta/);
 });
+
+test('display esegue lo script dello schermo e ne riporta il risultato', async () => {
+  const ran = [];
+  const ok = createSystem({ display: ['powershell.exe', '-File', 'schermo-pc.ps1'] }, {
+    exec: async (cmd, args) => { ran.push([cmd, args]); return { stdout: '  DELL U2720Q [vero, acceso]\r\nImmagine riportata sul monitor del PC\r\n' }; },
+  });
+  assert.deepEqual(await ok.display(), { ok: true, message: 'Immagine riportata sul monitor del PC' });
+  assert.deepEqual(ran, [['powershell.exe', ['-File', 'schermo-pc.ps1']]]);
+
+  const none = createSystem({ display: ['ps'] }, {
+    exec: async () => { throw Object.assign(new Error('Command failed'), { code: 2, stdout: 'Nessun monitor vero collegato\r\n' }); },
+  });
+  await assert.rejects(none.display(), (e) => e.status === 409 && /Nessun monitor/.test(e.message));
+  await assert.rejects(createSystem({}).display(), (e) => e.status === 404);
+});

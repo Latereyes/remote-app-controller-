@@ -105,5 +105,23 @@ export function createSystem(config, { exec = execFileP, delayMs = 1500, pollMs 
     return { action, inMs: delayMs };
   }
 
-  return { info, gpu, ollamaLoaded, unloadOllama, freeComfy, power };
+  /**
+   * Riporta l'immagine sul monitor del PC quando è rimasta sullo schermo virtuale di Moonlight
+   * (boot/schermo-pc.ps1). Restituisce l'ultima riga dello script, da mostrare nell'app.
+   */
+  async function display() {
+    const cmd = config.display;
+    if (!cmd) throw Object.assign(new Error('comando per lo schermo non configurato'), { status: 404 });
+    const last = (text) => String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).at(-1) || '';
+    try {
+      const { stdout } = await exec(cmd[0], cmd.slice(1), { timeout: 30000, windowsHide: true });
+      return { ok: true, message: last(stdout) || 'Fatto' };
+    } catch (e) {
+      // Uscita 2: nessun monitor vero collegato (o spento)
+      const status = e.code === 2 ? 409 : 500;
+      throw Object.assign(new Error(last(e.stdout) || last(e.stderr) || e.message), { status });
+    }
+  }
+
+  return { info, gpu, ollamaLoaded, unloadOllama, freeComfy, power, display };
 }

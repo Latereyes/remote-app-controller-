@@ -67,6 +67,7 @@ Le rotte vogliono `Authorization: Bearer <token>`: il token di sessione dato da 
 | `POST /api/gpu/leases/:id/renew` · `release` | rinnova (entro 60 s) o restituisce il permesso; `release` su un biglietto in coda vi rinuncia |
 | `POST /api/mode/game` | «per giocare»: scrive `boot/game.txt` (il countdown resta in modalità Xbox); se il PC è già in modalità server chiude le `serverApps` e passa a Xbox |
 | `POST /api/system/shutdown` · `restart` · `sleep` | alimentazione (parte dopo 1,5 s) |
+| `POST /api/system/display` | riporta l'immagine sul monitor del PC e spegne lo schermo virtuale di Moonlight → `{ ok, message }` (409 se non c'è un monitor vero collegato) |
 | `GET /api/displays` | schermi (MultiMonitorTool): acceso, principale, virtuale, risoluzione, e quale sta guardando Moonlight (log e `sunshine.conf` di Sunshine) |
 | `GET /api/gaming` | per giocare: GPU dettagliata (`nvidia-smi`: carico, °C, watt, frequenze, ventole, VRAM, encoder, freni), CPU, RAM, gioco Steam aperto, stream di Moonlight |
 | `GET /api/ssh` | server SSH del PC (`boot/installa-ssh.ps1`): installato, acceso, utente e porta, per il tasto «Apri SSH» |
@@ -106,6 +107,7 @@ Cosa fa (per l'amministratore):
 - nel pannello **Modalità gioco** mostra gli **FPS** del gioco (media, 1% low, tempo per frame) misurati con PresentMon: va installato una volta con `boot\installa-presentmon.ps1` (vedi `docs/prova-fps-app-japonika.md`);
 - mostra VRAM, carico e temperatura della GPU e i modelli Ollama in memoria, con il pulsante "Libera VRAM";
 - spegne, riavvia o sospende il PC (con conferma).
+- **Schermo del PC**: riporta l'immagine sul monitor quando è rimasta sullo schermo virtuale di Moonlight.
 
 Al primo avvio chiede l'indirizzo dell'agent (es. `pc-casa:7070` con Tailscale) e, se il PC non lo fornisce, indirizzo e token del relay; poi nome e password. Lo stato si aggiorna ogni 5 secondi solo mentre l'app è aperta.
 
@@ -137,7 +139,7 @@ Test: `cd relay && python3 -m unittest -v`.
 
 All'accesso automatico (modalità Xbox) compare in alto una finestra con un countdown di 30 secondi. Mouse, tastiera o controller Xbox lo interrompono e il PC resta in modalità Xbox. Se nessuno tocca niente, il PC passa in modalità server: si assicura che l'agent sia acceso e avvia le app in `serverApps` (di base Ollama e ComfyUI). La modalità scelta finisce in `boot/mode.txt`, e l'app la mostra.
 
-Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox).
+Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox), `schermoFisico` e `tastoSchermo` (vedi sotto).
 
 Con la TV spenta all'accesso non c'è nessuno schermo attivo e Sunshine non può trasmettere (Moonlight dà 503): il countdown lancia `boot/schermo-virtuale.ps1`, che in quel caso accende lo schermo virtuale (Virtual Display Driver, monitor `MTT1337`) con MultiMonitorTool e lo rende principale. Con la TV accesa non fa niente. Impostazioni in `boot.json`: `multiMonitorTool` (di base `C:\tools\MultiMonitorTool.exe`), `virtualDisplay`, `virtualDisplayHwId`.
 
@@ -156,3 +158,32 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall # rimuove tutto
 Il registro è in `boot/boot.log`, quello dell'agent in `agent/agent.log`.
 
 In modalità Xbox le attività "all'accesso" possono non partire. In quel caso basta richiamare `boot\avvia-tutto.bat` da uno script che parte con la modalità Xbox, per esempio aggiungendo `call "C:\AI\remote-app-controller\boot\avvia-tutto.bat"`. Si può chiamare più volte: il countdown decide una sola volta per accensione (`countdown.ps1 -Force` per riprovarlo a mano).
+
+### Monitor nero dopo Moonlight (`schermo-pc.ps1`)
+
+Per lo streaming con Moonlight Windows usa uno schermo virtuale (Virtual Display Driver, SudoVDA di Apollo, Parsec VDD...). Se lo streaming finisce senza che Sunshine lo spenga (Moonlight chiuso senza *Esci*, connessione caduta, PC spento a metà), Windows resta solo sullo schermo virtuale, anche dopo il riavvio, e il monitor vero rimane nero.
+
+`boot\schermo-pc.ps1` accende tutti i monitor veri collegati e spegne quelli virtuali, come farebbe Win+P, senza permessi di amministratore e senza disinstallare niente. Parte da solo:
+
+- **all'accensione**, prima del countdown (`"schermoFisico": false` in `boot.json` per non farlo);
+- con **Ctrl+Alt+S**, anche a monitor nero: `install.ps1` crea il collegamento *Schermo del PC* nel menu Start con quella scorciatoia (`tastoSchermo` in `boot.json`; rilancia `install.ps1` dopo averla cambiata);
+- dall'app sul telefono, pulsante **Schermo del PC** (solo amministratore, con l'agent acceso);
+- **da solo, con l'agent acceso**: ogni 20 s, se nessuno è collegato con Moonlight, l'agent controlla gli schermi (MultiMonitorTool). Se la TV è accesa insieme allo schermo virtuale, lascia solo la TV. Succede quando il PC si è avviato a TV spenta e `schermo-virtuale.ps1` ha reso principale lo schermo virtuale, e poi la TV è stata accesa: senza questo controllo restava nera. Se invece non c'è nessuno schermo acceso (TV spenta), riaccende lo schermo virtuale, così Moonlight si collega. Agisce solo se la situazione si ripete per due controlli di fila e mai durante lo stream (`agent/src/screenwatch.js`).
+
+Lo schermo virtuale si riconosce dalla scheda video "finta" (non PCI/USB) o dal nome; per vedere cosa trova senza cambiare niente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File schermo-pc.ps1 -Elenco
+```
+
+**Da ssh** lo script da solo non basta: la sessione ssh non ha lo schermo del PC. `schermo-da-ssh.ps1` lo esegue nella sessione di chi ha fatto l'accesso al PC (deve essere lo stesso utente dell'ssh) e stampa il risultato:
+
+```bat
+cd C:\AI\remote-app-controller
+powershell -ExecutionPolicy Bypass -File boot\schermo-da-ssh.ps1 -Elenco
+powershell -ExecutionPolicy Bypass -File boot\schermo-da-ssh.ps1
+```
+
+Se non c'è un monitor vero collegato (o è spento e Windows non lo vede) non cambia niente. Se il cambio diretto non riesce, mette gli schermi in *Duplica*, così il monitor mostra comunque l'immagine. Il registro è in `boot/boot.log`.
+
+Consigliato anche in Sunshine (*Applicazioni* → *Desktop* → *Comandi*): come comando di **annullamento** `powershell -ExecutionPolicy Bypass -File C:\AI\remote-app-controller\boot\schermo-pc.ps1`, così il monitor torna acceso appena si esce dalla sessione con *Esci* in Moonlight. Se Sunshine accende lo schermo virtuale con un comando di preparazione, lo streaming continua a funzionare come prima; se invece contava sul fatto che Windows restasse sullo schermo virtuale, dopo questa modifica lo streaming mostra il monitor vero.

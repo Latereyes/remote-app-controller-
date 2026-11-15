@@ -15,6 +15,10 @@ import { createSsh } from './src/ssh.js';
 import { TerminalManager } from './src/terminal.js';
 import { ApprovalQueue } from './src/approvals.js';
 import { createClaude } from './src/claude.js';
+import { createScreenWatch } from './src/screenwatch.js';
+import { readBootConfig } from './src/sunshine.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configFile = process.env.AGENT_CONFIG ? path.resolve(process.env.AGENT_CONFIG) : path.join(root, 'config.json');
@@ -36,6 +40,9 @@ try {
   process.exit(1);
 }
 
+// Schermo del PC: lo script sta in boot/ accanto all'agent
+config.display ||= ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, '..', 'boot', 'schermo-pc.ps1')];
+
 const apps = new AppManager(config.apps);
 const system = createSystem(config);
 // Modalità scelta dal countdown all'accensione (boot/mode.txt): "server", "xbox" o null
@@ -51,6 +58,18 @@ gpu.on('state', (s) => {
 });
 const bootDir = path.join(root, '..', 'boot');
 const displays = createDisplays({ bootDir });
+// Schermi giusti da soli quando nessuno è su Moonlight: TV accesa → solo la TV, nessuno schermo → schermo virtuale
+// ("schermoFisico": false in boot.json per non farlo)
+const execFileP = promisify(execFile);
+const virtualScreen = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(bootDir, 'schermo-virtuale.ps1')];
+const screenWatch = createScreenWatch({
+  displays,
+  run: (kind) => (kind === 'physical'
+    ? system.display()
+    : execFileP(virtualScreen[0], virtualScreen.slice(1), { timeout: 90000, windowsHide: true })),
+  enabled: () => process.platform === 'win32' && readBootConfig(bootDir).schermoFisico !== false,
+});
+setInterval(() => screenWatch.check(), 20000).unref();
 // FPS dei giochi: PresentMon in tools\ (boot\installa-presentmon.ps1), acceso solo mentre si guarda il pannello gioco
 const fps = config.fps.enabled ? createFps({ exe: config.fps.presentmon || null, toolsDir: path.join(root, '..', 'tools') }) : null;
 const gaming = createGaming({ bootDir, fps, getMode: mode.get });

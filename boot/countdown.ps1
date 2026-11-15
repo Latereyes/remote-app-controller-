@@ -7,6 +7,8 @@
   aspetta che sia pronto e poi lascia altri "sunshineGraceSeconds" per collegarsi: dopo un Wake-on-LAN
   la Deck vede il PC solo quando Sunshine ha finito di avviarsi.
   Conta come uso anche «Accendi per giocare» dall'app: l'agent scrive boot\game.txt e il countdown resta in modalità Xbox.
+  Prima del countdown riporta l'immagine sul monitor del PC se è rimasto acceso solo lo schermo virtuale
+  di Moonlight ("schermoFisico": false in boot.json per non farlo).
 
   -Seconds N  sovrascrive boot.json
   -NoGui      niente finestra (per i test)
@@ -25,7 +27,7 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here
 
 $cfg = @{
-  seconds = 30; serverApps = @('ollama', 'comfy'); agentAlways = $true
+  seconds = 30; serverApps = @('ollama', 'comfy'); agentAlways = $true; schermoFisico = $true
   sunshineLog = 'C:\Program Files\Sunshine\config\sunshine.log'; sunshineGraceSeconds = 45; sunshineWaitMax = 120
 }
 $cfgPath = Join-Path $here 'boot.json'
@@ -56,6 +58,13 @@ if (-not $Force -and -not $DryRun -and (Test-Path $modeFile)) {
     Write-Output 'Modalità già decisa dopo l''ultima accensione: esco'
     exit 0
   }
+}
+
+# Se lo streaming con Moonlight ha lasciato acceso solo lo schermo virtuale, il monitor del PC resta nero
+# anche dopo il riavvio: prima del countdown riporto l'immagine sul monitor vero
+if ($cfg.schermoFisico -and -not $DryRun) {
+  $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'schermo-pc.ps1') | Out-Null
 }
 
 Add-Type -TypeDefinition @'

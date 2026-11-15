@@ -24,6 +24,7 @@ before(async () => {
   const system = {
     info: async () => ({ hostname: 'pc' }),
     power: (a) => { calls.push(['power', a]); return { action: a }; },
+    display: async () => { calls.push(['display']); return { ok: true, message: 'Immagine riportata sul monitor del PC' }; },
   };
   const gpu = new GpuArbiter({ unload: { ollama: async () => ['gemma'], comfy: async () => true }, log: () => {} });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-http-'));
@@ -68,6 +69,10 @@ test('rotte delle app, del sistema e dell\'alimentazione', async () => {
   assert.equal((await call('/api/system/shutdown', { method: 'POST' })).status, 200);
   assert.equal((await call('/api/system/formatta', { method: 'POST' })).status, 404);
   assert.deepEqual(calls.at(-1), ['power', 'shutdown']);
+  const screen = await call('/api/system/display', { method: 'POST' });
+  assert.equal(screen.status, 200);
+  assert.equal((await screen.json()).ok, true);
+  assert.deepEqual(calls.at(-1), ['display']);
   assert.deepEqual(await (await call('/api/mode/game', { method: 'POST' })).json(), { mode: 'xbox' });
   assert.deepEqual(calls.at(-1), ['game', 'agent']);
 });
@@ -134,7 +139,7 @@ test('utente normale: solo le app abilitate, senza dati tecnici', async () => {
   assert.equal(started.port, undefined);
   assert.deepEqual(calls.at(-1), ['start', 'chatbz']);
   for (const [method, p] of [['POST', '/api/apps/chatbz/stop'], ['GET', '/api/apps/chatbz/logs'], ['GET', '/api/system'],
-    ['POST', '/api/system/shutdown'], ['POST', '/api/mode/game'], ['GET', '/api/gpu'], ['POST', '/api/gpu/free'], ['GET', '/api/users']]) {
+    ['POST', '/api/system/shutdown'], ['POST', '/api/system/display'], ['POST', '/api/mode/game'], ['GET', '/api/gpu'], ['POST', '/api/gpu/free'], ['GET', '/api/users']]) {
     assert.equal((await call(p, { method, auth: g })).status, 403, `${method} ${p}`);
   }
 

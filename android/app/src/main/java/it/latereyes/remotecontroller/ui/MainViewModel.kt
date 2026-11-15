@@ -47,7 +47,7 @@ data class UiState(
     val apps: List<AppStatus> = emptyList(),
     val system: SystemInfo? = null,
     val users: List<UserInfo> = emptyList(),
-    val busy: Set<String> = emptySet(),   // id delle app (o "gpu", "wake", "power", "login", "users") con un comando in corso
+    val busy: Set<String> = emptySet(),   // id delle app (o "gpu", "wake", "power", "display", "login", "users") con un comando in corso
     val message: String? = null,
     val logs: LogsView? = null,
     val lastUpdate: Long = 0,
@@ -253,6 +253,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }) {
         agent.power(action)
         _state.update { it.copy(pc = PcState.OFFLINE) }
+    }
+
+    fun display() = command("display", null) {
+        val msg = agent.display()
+        _state.update { it.copy(message = msg) }
     }
 
     fun showLogs(app: AppStatus) = command("logs-${app.id}", null) {

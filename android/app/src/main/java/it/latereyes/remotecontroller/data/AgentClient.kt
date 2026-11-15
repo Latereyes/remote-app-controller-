@@ -116,6 +116,10 @@ class AgentClient(private val baseUrl: String, private val token: String) {
 
     suspend fun freeGpu() { request(baseUrl, "/api/gpu/free", token, "POST", timeoutMs = 60000) }
 
+    /** Riporta l'immagine sul monitor del PC se è rimasta sullo schermo virtuale di Moonlight. Restituisce il risultato. */
+    suspend fun display(): String =
+        JSONObject(request(baseUrl, "/api/system/display", token, "POST", timeoutMs = 40000)).optString("message", "Fatto")
+
     // ---- Monitor, gioco, Claude, permessi, terminale (agent 0.2) ----
 
     suspend fun displays(): DisplaysInfo = DisplaysInfo.fromJson(request(baseUrl, "/api/displays", token, timeoutMs = 10000))

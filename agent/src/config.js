@@ -70,6 +70,8 @@ export function normalize(raw, env = process.env) {
     // Facoltativo: { url, token } del relay Wake-on-LAN, dato all'app dopo l'accesso (così gli altri utenti non lo devono inserire)
     relay: raw.relay?.url ? { url: String(raw.relay.url), token: String(raw.relay.token || '') } : null,
     power: { ...DEFAULT_POWER, ...(raw.power || {}) },
+    // Comando che riporta l'immagine sul monitor del PC (di base boot/schermo-pc.ps1, lo imposta server.js)
+    display: Array.isArray(raw.display) && raw.display.length ? raw.display.map(String) : null,
     // Terminale e Claude: solo per l'amministratore e solo da Tailscale o dal PC stesso (vedi http.js)
     terminal: { enabled: raw.terminal?.enabled !== false, cwd: expandEnv(raw.terminal?.cwd || '%USERPROFILE%', env), shell: Array.isArray(raw.terminal?.shell) ? raw.terminal.shell.map(String) : null },
     claude: {

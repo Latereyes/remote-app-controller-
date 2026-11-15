@@ -63,6 +63,7 @@ Le rotte vogliono `Authorization: Bearer <token>`: il token di sessione dato da 
 | `POST /api/gpu/acquire` | chiede la GPU: `{ who: "ollama"\|"comfy"\|"none", app, label, priority: "high"\|"normal"\|"low" }`, poi `{ ticket }` finché non risponde `granted` |
 | `POST /api/gpu/leases/:id/renew` · `release` | rinnova (entro 60 s) o restituisce il permesso; `release` su un biglietto in coda vi rinuncia |
 | `POST /api/system/shutdown` · `restart` · `sleep` | alimentazione (parte dopo 1,5 s) |
+| `POST /api/system/display` | riporta l'immagine sul monitor del PC e spegne lo schermo virtuale di Moonlight → `{ ok, message }` (409 se non c'è un monitor vero collegato) |
 
 Nota: `sleep` usa `SetSuspendState`, che iberna se l'ibernazione è attiva (`powercfg /h off` per avere la sospensione vera).
 
@@ -91,6 +92,7 @@ Cosa fa (per l'amministratore):
 - elenca Ollama, ComfyUI, ChatBz e LocalAI con il loro stato, li avvia e li ferma, mostra i log e apre ChatBz o LocalAI nel browser;
 - mostra VRAM, carico e temperatura della GPU e i modelli Ollama in memoria, con il pulsante "Libera VRAM";
 - spegne, riavvia o sospende il PC (con conferma).
+- **Schermo del PC**: riporta l'immagine sul monitor quando è rimasta sullo schermo virtuale di Moonlight.
 
 Al primo avvio chiede l'indirizzo dell'agent (es. `pc-casa:7070` con Tailscale) e, se il PC non lo fornisce, indirizzo e token del relay; poi nome e password. Lo stato si aggiorna ogni 5 secondi solo mentre l'app è aperta.
 
@@ -122,7 +124,7 @@ Test: `cd relay && python3 -m unittest -v`.
 
 All'accesso automatico (modalità Xbox) compare in alto una finestra con un countdown di 30 secondi. Mouse, tastiera o controller Xbox lo interrompono e il PC resta in modalità Xbox. Se nessuno tocca niente, il PC passa in modalità server: si assicura che l'agent sia acceso e avvia le app in `serverApps` (di base Ollama e ComfyUI). La modalità scelta finisce in `boot/mode.txt`, e l'app la mostra.
 
-Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox).
+Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox), `schermoFisico` e `tastoSchermo` (vedi sotto).
 
 Installazione (PowerShell nella cartella `boot`):
 
@@ -135,3 +137,23 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall # rimuove tutto
 Il registro è in `boot/boot.log`, quello dell'agent in `agent/agent.log`.
 
 In modalità Xbox le attività "all'accesso" possono non partire. In quel caso basta richiamare `boot\avvia-tutto.bat` da uno script che parte con la modalità Xbox, per esempio aggiungendo `call "C:\AI\remote-app-controller\boot\avvia-tutto.bat"`. Si può chiamare più volte: il countdown decide una sola volta per accensione (`countdown.ps1 -Force` per riprovarlo a mano).
+
+### Monitor nero dopo Moonlight (`schermo-pc.ps1`)
+
+Per lo streaming con Moonlight Windows usa uno schermo virtuale (Virtual Display Driver, SudoVDA di Apollo, Parsec VDD...). Se lo streaming finisce senza che Sunshine lo spenga (Moonlight chiuso senza *Esci*, connessione caduta, PC spento a metà), Windows resta solo sullo schermo virtuale, anche dopo il riavvio, e il monitor vero rimane nero.
+
+`boot\schermo-pc.ps1` accende tutti i monitor veri collegati e spegne quelli virtuali, come farebbe Win+P, senza permessi di amministratore e senza disinstallare niente. Parte da solo:
+
+- **all'accensione**, prima del countdown (`"schermoFisico": false` in `boot.json` per non farlo);
+- con **Ctrl+Alt+S**, anche a monitor nero: `install.ps1` crea il collegamento *Schermo del PC* nel menu Start con quella scorciatoia (`tastoSchermo` in `boot.json`; rilancia `install.ps1` dopo averla cambiata);
+- dall'app sul telefono, pulsante **Schermo del PC** (solo amministratore, con l'agent acceso).
+
+Lo schermo virtuale si riconosce dalla scheda video "finta" (non PCI/USB) o dal nome; per vedere cosa trova senza cambiare niente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File schermo-pc.ps1 -Elenco
+```
+
+Se non c'è un monitor vero collegato (o è spento e Windows non lo vede) non cambia niente. Se il cambio diretto non riesce, mette gli schermi in *Duplica*, così il monitor mostra comunque l'immagine. Il registro è in `boot/boot.log`.
+
+Consigliato anche in Sunshine (*Applicazioni* → *Desktop* → *Comandi*): come comando di **annullamento** `powershell -ExecutionPolicy Bypass -File C:\AI\remote-app-controller\boot\schermo-pc.ps1`, così il monitor torna acceso appena si esce dalla sessione con *Esci* in Moonlight. Se Sunshine accende lo schermo virtuale con un comando di preparazione, lo streaming continua a funzionare come prima; se invece contava sul fatto che Windows restasse sullo schermo virtuale, dopo questa modifica lo streaming mostra il monitor vero.

@@ -65,6 +65,8 @@ export function normalize(raw, env = process.env) {
     // Facoltativo: { url, token } del relay Wake-on-LAN, dato all'app dopo l'accesso (così gli altri utenti non lo devono inserire)
     relay: raw.relay?.url ? { url: String(raw.relay.url), token: String(raw.relay.token || '') } : null,
     power: { ...DEFAULT_POWER, ...(raw.power || {}) },
+    // Comando che riporta l'immagine sul monitor del PC (di base boot/schermo-pc.ps1, lo imposta server.js)
+    display: Array.isArray(raw.display) && raw.display.length ? raw.display.map(String) : null,
   };
 }
 

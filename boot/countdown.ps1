@@ -3,6 +3,8 @@
   Se entro "seconds" nessuno usa mouse, tastiera o controller Xbox, il PC passa in modalità server:
   avvia l'agent (se non è già acceso) e le app in "serverApps" di boot.json.
   Se qualcuno lo usa, resta in modalità Xbox e non avvia niente.
+  Prima del countdown riporta l'immagine sul monitor del PC se è rimasto acceso solo lo schermo virtuale
+  di Moonlight ("schermoFisico": false in boot.json per non farlo).
 
   -Seconds N  sovrascrive boot.json
   -NoGui      niente finestra (per i test)
@@ -20,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here
 
-$cfg = @{ seconds = 30; serverApps = @('ollama', 'comfy'); agentAlways = $true }
+$cfg = @{ seconds = 30; serverApps = @('ollama', 'comfy'); agentAlways = $true; schermoFisico = $true }
 $cfgPath = Join-Path $here 'boot.json'
 if (Test-Path $cfgPath) {
   (Get-Content $cfgPath -Raw | ConvertFrom-Json).psobject.Properties | ForEach-Object { $cfg[$_.Name] = $_.Value }
@@ -42,6 +44,13 @@ if (-not $Force -and -not $DryRun -and (Test-Path $modeFile)) {
     Write-Output 'Modalità già decisa dopo l''ultima accensione: esco'
     exit 0
   }
+}
+
+# Se lo streaming con Moonlight ha lasciato acceso solo lo schermo virtuale, il monitor del PC resta nero
+# anche dopo il riavvio: prima del countdown riporto l'immagine sul monitor vero
+if ($cfg.schermoFisico -and -not $DryRun) {
+  $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'schermo-pc.ps1') | Out-Null
 }
 
 Add-Type -TypeDefinition @'

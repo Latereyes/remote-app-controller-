@@ -189,6 +189,8 @@ private fun PcCard(state: UiState, vm: MainViewModel, onPower: (String) -> Unit)
                         OutlinedButton(onClick = { onPower("shutdown") }, enabled = !off) { Text("Spegni") }
                         OutlinedButton(onClick = { onPower("restart") }, enabled = !off) { Text("Riavvia") }
                         OutlinedButton(onClick = { onPower("sleep") }, enabled = !off) { Text("Sospendi") }
+                        // Monitor nero dopo Moonlight: riporta l'immagine dallo schermo virtuale a quello vero
+                        OutlinedButton(onClick = vm::display, enabled = !off && "display" !in state.busy) { Text("Schermo del PC") }
                     }
                 }
             }

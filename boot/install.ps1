@@ -2,6 +2,8 @@
   Registra le attività pianificate all'accesso dell'utente (quello dell'accesso automatico in modalità Xbox):
   - RemoteAppController-Agent: avvia l'agent (solo se "agentAlways" è true in boot.json)
   - RemoteAppController-Countdown: countdown di 30 s, 10 s dopo l'accesso
+  e il collegamento "Schermo del PC" nel menu Start, con la scorciatoia "tastoSchermo" di boot.json
+  (Ctrl+Alt+S): riporta l'immagine sul monitor quando è rimasta sullo schermo virtuale di Moonlight.
   Uso:  powershell -ExecutionPolicy Bypass -File install.ps1           (installa o aggiorna)
         powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 #>
@@ -14,7 +16,9 @@ $names = @('RemoteAppController-Agent', 'RemoteAppController-Countdown')
 foreach ($n in $names) {
   if (Get-ScheduledTask -TaskName $n -ErrorAction SilentlyContinue) { Unregister-ScheduledTask -TaskName $n -Confirm:$false }
 }
-if ($Uninstall) { Write-Output 'Attività rimosse.'; exit 0 }
+$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Schermo del PC.lnk'
+if (Test-Path $shortcut) { Remove-Item $shortcut }
+if ($Uninstall) { Write-Output 'Attività e collegamento rimossi.'; exit 0 }
 
 $cfg = Get-Content (Join-Path $here 'boot.json') -Raw | ConvertFrom-Json
 $user = "$env:USERDOMAIN\$env:USERNAME"
@@ -33,4 +37,15 @@ function Add-Task([string]$name, [string]$script, [string]$delay) {
 
 if ($cfg.agentAlways) { Add-Task 'RemoteAppController-Agent' 'start-agent.ps1' $null }
 Add-Task 'RemoteAppController-Countdown' 'countdown.ps1' 'PT10S'
+
+# Scorciatoia da tastiera (funziona anche a monitor nero): i collegamenti del menu Start possono averne una
+$lnk = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+$lnk.TargetPath = $ps
+$lnk.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$(Join-Path $here 'schermo-pc.ps1')`""
+$lnk.WorkingDirectory = $here
+$lnk.WindowStyle = 7   # ridotta a icona
+$lnk.Description = 'Riporta l''immagine sul monitor del PC e spegne lo schermo virtuale di Moonlight'
+if ($cfg.tastoSchermo) { $lnk.Hotkey = $cfg.tastoSchermo }
+$lnk.Save()
+Write-Output "Collegamento: Schermo del PC$(if ($cfg.tastoSchermo) { " ($($cfg.tastoSchermo))" })"
 Write-Output "Fatto. Al prossimo accesso parte il countdown di $($cfg.seconds) s."

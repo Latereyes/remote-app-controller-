@@ -91,6 +91,7 @@ export function createServer({ config, apps, system, gpu, users, getMode = () =>
     }, { local: true }],
     ['POST', /^\/api\/gpu\/leases\/([A-Za-z0-9_-]+)\/renew$/, (m) => gpu.renew(m[1]), { local: true }],
     ['POST', /^\/api\/gpu\/leases\/([A-Za-z0-9_-]+)\/release$/, (m) => gpu.release(m[1]), { local: true }],
+    ['POST', /^\/api\/system\/display$/, () => { log('[schermo] riporto l\'immagine sul monitor del PC'); return system.display(); }],
     ['POST', /^\/api\/system\/(shutdown|restart|sleep)$/, (m) => { log(`[power] ${m[1]} richiesto`); return system.power(m[1]); }],
     ['GET', /^\/api\/users$/, () => users.list()],
     ['POST', /^\/api\/users$/, async (m, url, req) => {

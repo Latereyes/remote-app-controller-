@@ -27,3 +27,10 @@ jobs:
           $out = powershell -NoProfile -ExecutionPolicy Bypass -File boot\countdown.ps1 -Seconds 2 -NoGui -DryRun | Out-String
           Write-Output $out
           if ($out -notmatch 'server') { exit 1 }
+      - name: Schermo del PC (compila e legge gli schermi, senza cambiarli)
+        shell: powershell
+        run: |
+          $out = powershell -NoProfile -ExecutionPolicy Bypass -File boot\schermo-pc.ps1 -Elenco 2>&1 | Out-String
+          Write-Output $out
+          # Sul runner può non esserci uno schermo: basta che il codice C# compili e la lettura parta
+          if ($out -notmatch 'Schermi trovati') { exit 1 }

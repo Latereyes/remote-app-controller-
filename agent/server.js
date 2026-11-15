@@ -29,6 +29,9 @@ try {
   process.exit(1);
 }
 
+// Schermo del PC: lo script sta in boot/ accanto all'agent
+config.display ||= ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, '..', 'boot', 'schermo-pc.ps1')];
+
 const apps = new AppManager(config.apps);
 const system = createSystem(config);
 // Modalità scelta dal countdown all'accensione (boot/mode.txt): "server", "xbox" o null

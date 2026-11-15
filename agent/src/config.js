@@ -17,6 +17,9 @@ const DEFAULT_POWER = {
   sleep: ['rundll32.exe', 'powrprof.dll,SetSuspendState', '0,1,0'],
 };
 
+// App che di base vanno fra i «motori» (si può cambiare con "kind" in config.json)
+const ENGINES = new Set(['ollama', 'comfy']);
+
 /** Valida la configurazione e la porta in forma pronta per l'uso (percorsi espansi e risolti). */
 export function normalize(raw, env = process.env) {
   if (typeof raw.token !== 'string' || raw.token.length < 16) {
@@ -50,6 +53,8 @@ export function normalize(raw, env = process.env) {
       stop: a.stop || null,
       autostart: !!a.autostart,
       startTimeoutSec: Number(a.startTimeoutSec || 120),
+      // Gruppo nell'app: «engine» (Ollama, ComfyUI: i motori che usano la GPU) o «app» (ChatBz, LocalAI, Japonika…)
+      kind: a.kind === 'engine' || a.kind === 'app' ? a.kind : (ENGINES.has(a.id) ? 'engine' : 'app'),
     };
   });
   for (const a of apps) {
@@ -67,6 +72,21 @@ export function normalize(raw, env = process.env) {
     power: { ...DEFAULT_POWER, ...(raw.power || {}) },
     // Comando che riporta l'immagine sul monitor del PC (di base boot/schermo-pc.ps1, lo imposta server.js)
     display: Array.isArray(raw.display) && raw.display.length ? raw.display.map(String) : null,
+    // Terminale e Claude: solo per l'amministratore e solo da Tailscale o dal PC stesso (vedi http.js)
+    terminal: { enabled: raw.terminal?.enabled !== false, cwd: expandEnv(raw.terminal?.cwd || '%USERPROFILE%', env), shell: Array.isArray(raw.terminal?.shell) ? raw.terminal.shell.map(String) : null },
+    claude: {
+      enabled: raw.claude?.enabled !== false,
+      command: expandEnv(raw.claude?.command || 'claude', env),
+      cwd: expandEnv(raw.claude?.cwd || 'C:\\AI', env),
+      name: String(raw.claude?.name || 'PC di casa'),
+      args: (raw.claude?.args || []).map(String),
+      approvals: raw.claude?.approvals !== false,
+      approvalTimeoutSec: Number(raw.claude?.approvalTimeoutSec || 600),
+    },
+    // Reti da cui si possono usare terminale, Claude e permessi: di base Tailscale (100.64.0.0/10) e il PC stesso
+    // FPS dei giochi con PresentMon (vedi fps.js e boot/installa-presentmon.ps1); path vuoto = tools\PresentMon.exe
+    fps: { enabled: raw.fps?.enabled !== false, presentmon: expandEnv(raw.fps?.presentmon || '', env) },
+    trustedNets: Array.isArray(raw.trustedNets) ? raw.trustedNets.map(String) : ['100.64.0.0/10', 'fd7a:115c:a1e0::/48'],
   };
 }
 

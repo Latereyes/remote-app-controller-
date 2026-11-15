@@ -26,6 +26,9 @@ Al primo avvio crea `agent/config.json` dall'esempio e stampa il **token** da in
 | ComfyUI | `venv\Scripts\python.exe main.py` + argomenti di Stability Matrix | `C:\IA\Packages\ComfyUI` |
 | ChatBz | `start.bat` | `%USERPROFILE%\Documents\NEW CHATBZ\ChatBz2` |
 | LocalAI | `start.bat` | `%USERPROFILE%\Documents\LocalAI` |
+| Japonika | `node server.mjs` (porta 8765, dal telefono via `tailscale serve` sulla 8445) | `C:\AI\JAPONIKA\app` |
+
+`kind` divide le app in due gruppi nell'app Android: `engine` (Ollama e ComfyUI, i motori che si dividono la GPU) e `app` (il resto). Se manca, Ollama e ComfyUI sono motori e le altre app.
 
 Ogni app ha un URL `health`: se risponde, l'app è considerata accesa (anche se l'ha avviata qualcun altro). `requires` avvia prima le dipendenze (ChatBz e LocalAI accendono Ollama e ComfyUI). `stop.url` è la chiusura gentile; se manca o non basta, l'agent chiude il processo con tutti i figli.
 
@@ -62,8 +65,18 @@ Le rotte vogliono `Authorization: Bearer <token>`: il token di sessione dato da 
 | `POST /api/gpu/free` | al suo turno scarica i modelli di Ollama e libera la VRAM di ComfyUI |
 | `POST /api/gpu/acquire` | chiede la GPU: `{ who: "ollama"\|"comfy"\|"none", app, label, priority: "high"\|"normal"\|"low" }`, poi `{ ticket }` finché non risponde `granted` |
 | `POST /api/gpu/leases/:id/renew` · `release` | rinnova (entro 60 s) o restituisce il permesso; `release` su un biglietto in coda vi rinuncia |
+| `POST /api/mode/game` | «per giocare»: scrive `boot/game.txt` (il countdown resta in modalità Xbox); se il PC è già in modalità server chiude le `serverApps` e passa a Xbox |
 | `POST /api/system/shutdown` · `restart` · `sleep` | alimentazione (parte dopo 1,5 s) |
 | `POST /api/system/display` | riporta l'immagine sul monitor del PC e spegne lo schermo virtuale di Moonlight → `{ ok, message }` (409 se non c'è un monitor vero collegato) |
+| `GET /api/displays` | schermi (MultiMonitorTool): acceso, principale, virtuale, risoluzione, e quale sta guardando Moonlight (log e `sunshine.conf` di Sunshine) |
+| `GET /api/gaming` | per giocare: GPU dettagliata (`nvidia-smi`: carico, °C, watt, frequenze, ventole, VRAM, encoder, freni), CPU, RAM, gioco Steam aperto, stream di Moonlight |
+| `GET /api/ssh` | server SSH del PC (`boot/installa-ssh.ps1`): installato, acceso, utente e porta, per il tasto «Apri SSH» |
+| `POST /api/terminal` · `GET /api/terminal/:id?since=&wait=` · `POST …/input` · `DELETE` | 🔒 terminale PowerShell sul PC (si chiude dopo 15 min senza uso) |
+| `GET /api/claude` · `POST /api/claude/start` · `stop` | 🔒 Claude Code con il controllo remoto, in una finestra sul PC |
+| `GET /api/approvals` · `POST /api/approvals/:id/decide` | 🔒 richieste di permesso in attesa; `{ allow: true\|false }` |
+| `POST /api/approvals/ask` · `GET /api/approvals/:id/wait` | solo dal PC: le usano l'hook di Claude (`agent/claude/permesso.js`) e `agent/claude/chiedi-permesso.ps1` |
+
+🔒 = solo amministratore **e** solo da Tailscale (`trustedNets`, di base 100.64.0.0/10) o dal PC stesso. Prova sul PC: `docs/prova-monitor-terminale-claude-gioco.md`.
 
 Nota: `sleep` usa `SetSuspendState`, che iberna se l'ibernazione è attiva (`powercfg /h off` per avere la sospensione vera).
 
@@ -89,7 +102,9 @@ Si entra con nome e password (vedi *Utenti e accesso*). Gli utenti normali vedon
 
 Cosa fa (per l'amministratore):
 - mostra se il PC è acceso, spento o in accensione, e lo accende tramite il relay del telefono di casa (`POST /wake`);
-- elenca Ollama, ComfyUI, ChatBz e LocalAI con il loro stato, li avvia e li ferma, mostra i log e apre ChatBz o LocalAI nel browser;
+- **Accendi per giocare (Steam Deck)**: accende il PC come sopra, e appena l'agent risponde gli chiede di restare in modalità Xbox (`POST /api/mode/game`), così Ollama e ComfyUI non partono e si gioca da Moonlight. Se il PC è già acceso in modalità server, **Passa a modalità gioco** chiude le app del countdown (`serverApps`) e torna in modalità Xbox;
+- elenca in due gruppi i **motori AI** (Ollama e ComfyUI, schede blu) e le **app** (ChatBz, LocalAI, Japonika, ognuna col suo colore) con il loro stato, le avvia e le ferma, mostra i log e le apre nel browser;
+- nel pannello **Modalità gioco** mostra gli **FPS** del gioco (media, 1% low, tempo per frame) misurati con PresentMon: va installato una volta con `boot\installa-presentmon.ps1` (vedi `docs/prova-fps-app-japonika.md`);
 - mostra VRAM, carico e temperatura della GPU e i modelli Ollama in memoria, con il pulsante "Libera VRAM";
 - spegne, riavvia o sospende il PC (con conferma).
 - **Schermo del PC**: riporta l'immagine sul monitor quando è rimasta sullo schermo virtuale di Moonlight.
@@ -126,6 +141,12 @@ All'accesso automatico (modalità Xbox) compare in alto una finestra con un coun
 
 Impostazioni in `boot/boot.json`: `seconds`, `serverApps`, `agentAlways` (se `true` l'agent parte a ogni accesso, così il PC si controlla anche in modalità Xbox), `schermoFisico` e `tastoSchermo` (vedi sotto).
 
+Con la TV spenta all'accesso non c'è nessuno schermo attivo e Sunshine non può trasmettere (Moonlight dà 503): il countdown lancia `boot/schermo-virtuale.ps1`, che in quel caso accende lo schermo virtuale (Virtual Display Driver, monitor `MTT1337`) con MultiMonitorTool e lo rende principale. Con la TV accesa non fa niente. Impostazioni in `boot.json`: `multiMonitorTool` (di base `C:\tools\MultiMonitorTool.exe`), `virtualDisplay`, `virtualDisplayHwId`.
+
+Conta come uso anche **Accendi per giocare** dall'app: l'agent (che parte all'accesso con `agentAlways`) scrive `boot/game.txt` e il countdown, se il file è più recente dell'ultima accensione, resta in modalità Xbox.
+
+Con Sunshine installato conta come uso anche una connessione da Moonlight. Dopo un Wake-on-LAN la Deck vede il PC solo quando Sunshine ha finito di avviarsi (circa 30 s dopo l'accesso), quindi il countdown aspetta Sunshine e scade non prima di `sunshineGraceSeconds` (45) secondi da quando è pronto. Se Sunshine non è pronto entro `sunshineWaitMax` (120) secondi, il countdown riparte senza aspettarlo. Il log letto è `sunshineLog`. In modalità server si arriva quindi circa 75 s dopo l'accesso invece di 30.
+
 Installazione (PowerShell nella cartella `boot`):
 
 ```powershell
@@ -146,7 +167,8 @@ Per lo streaming con Moonlight Windows usa uno schermo virtuale (Virtual Display
 
 - **all'accensione**, prima del countdown (`"schermoFisico": false` in `boot.json` per non farlo);
 - con **Ctrl+Alt+S**, anche a monitor nero: `install.ps1` crea il collegamento *Schermo del PC* nel menu Start con quella scorciatoia (`tastoSchermo` in `boot.json`; rilancia `install.ps1` dopo averla cambiata);
-- dall'app sul telefono, pulsante **Schermo del PC** (solo amministratore, con l'agent acceso).
+- dall'app sul telefono, pulsante **Schermo del PC** (solo amministratore, con l'agent acceso);
+- **da solo, con l'agent acceso**: ogni 20 s, se nessuno è collegato con Moonlight, l'agent controlla gli schermi (MultiMonitorTool). Se la TV è accesa insieme allo schermo virtuale, lascia solo la TV. Succede quando il PC si è avviato a TV spenta e `schermo-virtuale.ps1` ha reso principale lo schermo virtuale, e poi la TV è stata accesa: senza questo controllo restava nera. Se invece non c'è nessuno schermo acceso (TV spenta), riaccende lo schermo virtuale, così Moonlight si collega. Agisce solo se la situazione si ripete per due controlli di fila e mai durante lo stream (`agent/src/screenwatch.js`).
 
 Lo schermo virtuale si riconosce dalla scheda video "finta" (non PCI/USB) o dal nome; per vedere cosa trova senza cambiare niente:
 

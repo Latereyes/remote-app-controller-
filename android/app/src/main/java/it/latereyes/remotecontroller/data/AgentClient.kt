@@ -110,11 +110,48 @@ class AgentClient(private val baseUrl: String, private val token: String) {
 
     suspend fun system(): SystemInfo = SystemInfo.fromJson(request(baseUrl, "/api/system", token, timeoutMs = 10000))
 
+    /** «Per giocare»: il PC resta (o torna) in modalità Xbox. Risponde la modalità dopo la richiesta. */
+    suspend fun gameMode(): String =
+        JSONObject(request(baseUrl, "/api/mode/game", token, "POST", timeoutMs = 60000)).optString("mode")
+
     suspend fun freeGpu() { request(baseUrl, "/api/gpu/free", token, "POST", timeoutMs = 60000) }
 
     /** Riporta l'immagine sul monitor del PC se è rimasta sullo schermo virtuale di Moonlight. Restituisce il risultato. */
     suspend fun display(): String =
         JSONObject(request(baseUrl, "/api/system/display", token, "POST", timeoutMs = 40000)).optString("message", "Fatto")
+
+    // ---- Monitor, gioco, Claude, permessi, terminale (agent 0.2) ----
+
+    suspend fun displays(): DisplaysInfo = DisplaysInfo.fromJson(request(baseUrl, "/api/displays", token, timeoutMs = 10000))
+
+    suspend fun gaming(): GamingInfo = GamingInfo.fromJson(request(baseUrl, "/api/gaming", token, timeoutMs = 10000))
+
+    suspend fun ssh(): SshInfo = SshInfo.fromJson(request(baseUrl, "/api/ssh", token))
+
+    suspend fun claude(): ClaudeStatus = ClaudeStatus.fromJson(request(baseUrl, "/api/claude", token))
+
+    suspend fun startClaude(): ClaudeStatus = ClaudeStatus.fromJson(request(baseUrl, "/api/claude/start", token, "POST", timeoutMs = 20000))
+
+    suspend fun stopClaude(): ClaudeStatus = ClaudeStatus.fromJson(request(baseUrl, "/api/claude/stop", token, "POST", timeoutMs = 20000))
+
+    suspend fun approvals(): List<Approval> = Approval.listFromJson(request(baseUrl, "/api/approvals", token, timeoutMs = 5000))
+
+    suspend fun decide(id: String, allow: Boolean) {
+        request(baseUrl, "/api/approvals/$id/decide", token, "POST", body = JSONObject().put("allow", allow))
+    }
+
+    /** Apre un terminale sul PC e ne restituisce l'id. */
+    suspend fun openTerminal(): String = JSONObject(request(baseUrl, "/api/terminal", token, "POST")).getString("id")
+
+    /** Output dal punto `since`; se non c'è niente di nuovo l'agent aspetta fino a `waitMs`. */
+    suspend fun readTerminal(id: String, since: Long, waitMs: Int = 15000): TerminalChunk =
+        TerminalChunk.fromJson(request(baseUrl, "/api/terminal/$id?since=$since&wait=$waitMs", token, timeoutMs = waitMs + 8000))
+
+    suspend fun sendTerminal(id: String, line: String) {
+        request(baseUrl, "/api/terminal/$id/input", token, "POST", body = JSONObject().put("line", line))
+    }
+
+    suspend fun closeTerminal(id: String) { request(baseUrl, "/api/terminal/$id", token, "DELETE", timeoutMs = 5000) }
 
     /** action: shutdown | restart | sleep */
     suspend fun power(action: String) { request(baseUrl, "/api/system/$action", token, "POST") }

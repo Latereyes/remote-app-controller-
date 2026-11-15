@@ -35,6 +35,13 @@ test('normalize risolve i comandi relativi nella cartella dell\'app', () => {
 test('config.example.json è valido', () => {
   const raw = JSON.parse(fs.readFileSync(path.join(root, 'config.example.json'), 'utf8'));
   const cfg = normalize({ ...raw, token }, { USERPROFILE: 'C:\\Users\\andrea' });
-  assert.deepEqual(cfg.apps.map((a) => a.id), ['ollama', 'comfy', 'chatbz', 'localai']);
+  assert.deepEqual(cfg.apps.map((a) => a.id), ['ollama', 'comfy', 'chatbz', 'localai', 'japonika']);
   assert.deepEqual(cfg.apps.find((a) => a.id === 'chatbz').requires, ['ollama', 'comfy']);
+  // Motori e app separati nell'app; Japonika non dipende da Ollama (il tutor è facoltativo)
+  assert.deepEqual(cfg.apps.map((a) => a.kind), ['engine', 'engine', 'app', 'app', 'app']);
+  assert.deepEqual(cfg.apps.find((a) => a.id === 'japonika').requires, []);
+  assert.equal(cfg.fps.enabled, true);
+  // Senza "kind" in config.json: Ollama e ComfyUI sono motori, il resto app
+  const old = normalize({ token, apps: [{ id: 'ollama', command: 'x', health: 'h' }, { id: 'altro', command: 'x', health: 'h' }] });
+  assert.deepEqual(old.apps.map((a) => a.kind), ['engine', 'app']);
 });

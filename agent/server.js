@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +7,18 @@ import { createSystem } from './src/system.js';
 import { createServer } from './src/http.js';
 import { GpuArbiter } from './src/gpu.js';
 import { UserStore } from './src/users.js';
+import { createModeControl } from './src/mode.js';
+import { createDisplays } from './src/displays.js';
+import { createGaming } from './src/gaming.js';
+import { createFps } from './src/fps.js';
+import { createSsh } from './src/ssh.js';
+import { TerminalManager } from './src/terminal.js';
+import { ApprovalQueue } from './src/approvals.js';
+import { createClaude } from './src/claude.js';
+import { createScreenWatch } from './src/screenwatch.js';
+import { readBootConfig } from './src/sunshine.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configFile = process.env.AGENT_CONFIG ? path.resolve(process.env.AGENT_CONFIG) : path.join(root, 'config.json');
@@ -35,8 +46,7 @@ config.display ||= ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass'
 const apps = new AppManager(config.apps);
 const system = createSystem(config);
 // Modalità scelta dal countdown all'accensione (boot/mode.txt): "server", "xbox" o null
-const modeFile = path.join(root, '..', 'boot', 'mode.txt');
-const getMode = () => { try { return fs.readFileSync(modeFile, 'utf8').trim() || null; } catch { return null; } };
+const mode = createModeControl({ bootDir: path.join(root, '..', 'boot'), apps });
 // Arbitro della GPU per ChatBz, LocalAI e l'app Android: un lavoro alla volta, l'altro motore scaricato
 const gpu = new GpuArbiter({ unload: { ollama: () => system.unloadOllama(), comfy: () => system.freeComfy() } });
 setInterval(() => gpu.sweep(), 5000).unref();
@@ -46,7 +56,32 @@ gpu.on('state', (s) => {
   if (key && key !== lastGpuLog) console.log(`  [gpu] ${key} (${s.owner || '-'}${s.queue.length ? `, ${s.queue.length} in coda` : ''})`);
   lastGpuLog = key;
 });
-const server = createServer({ config, apps, system, gpu, users, getMode });
+const bootDir = path.join(root, '..', 'boot');
+const displays = createDisplays({ bootDir });
+// Schermi giusti da soli quando nessuno è su Moonlight: TV accesa → solo la TV, nessuno schermo → schermo virtuale
+// ("schermoFisico": false in boot.json per non farlo)
+const execFileP = promisify(execFile);
+const virtualScreen = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(bootDir, 'schermo-virtuale.ps1')];
+const screenWatch = createScreenWatch({
+  displays,
+  run: (kind) => (kind === 'physical'
+    ? system.display()
+    : execFileP(virtualScreen[0], virtualScreen.slice(1), { timeout: 90000, windowsHide: true })),
+  enabled: () => process.platform === 'win32' && readBootConfig(bootDir).schermoFisico !== false,
+});
+setInterval(() => screenWatch.check(), 20000).unref();
+// FPS dei giochi: PresentMon in tools\ (boot\installa-presentmon.ps1), acceso solo mentre si guarda il pannello gioco
+const fps = config.fps.enabled ? createFps({ exe: config.fps.presentmon || null, toolsDir: path.join(root, '..', 'tools') }) : null;
+const gaming = createGaming({ bootDir, fps, getMode: mode.get });
+process.on('exit', () => fps?.close());
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));
+const ssh = createSsh();
+const terminals = config.terminal.enabled
+  ? new TerminalManager({ cwd: config.terminal.cwd, ...(config.terminal.shell ? { shell: config.terminal.shell } : {}) })
+  : null;
+const approvals = new ApprovalQueue({ timeoutMs: config.claude.approvalTimeoutSec * 1000 });
+const claude = config.claude.enabled ? createClaude({ config, stateDir: path.dirname(configFile), approvals }) : null;
+const server = createServer({ config, apps, system, gpu, users, getMode: mode.get, requestGame: mode.requestGame, displays, gaming, ssh, terminals, claude, approvals });
 
 server.listen(config.port, config.host, () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i?.family === 'IPv4' && !i.internal).map((i) => i.address);

@@ -2,6 +2,8 @@
   "seconds": 30,
   "serverApps": ["ollama", "comfy"],
   "agentAlways": true,
+  "sunshineGraceSeconds": 45,
+  "sunshineWaitMax": 120,
   "schermoFisico": true,
   "tastoSchermo": "CTRL+ALT+S"
 }

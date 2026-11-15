@@ -19,6 +19,7 @@ import it.latereyes.remotecontroller.ui.HomeScreen
 import it.latereyes.remotecontroller.ui.LoginScreen
 import it.latereyes.remotecontroller.ui.MainViewModel
 import it.latereyes.remotecontroller.ui.SettingsScreen
+import it.latereyes.remotecontroller.ui.TerminalScreen
 import it.latereyes.remotecontroller.ui.UsersScreen
 import kotlinx.coroutines.launch
 
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
                 val state by vm.state.collectAsStateWithLifecycle()
                 var showSettings by rememberSaveable { mutableStateOf(!state.settings.isConfigured) }
                 var showUsers by rememberSaveable { mutableStateOf(false) }
+                var showTerminal by rememberSaveable { mutableStateOf(false) }
                 when {
                     showSettings -> {
                         BackHandler(enabled = state.settings.isConfigured) { showSettings = false }
@@ -49,7 +51,13 @@ class MainActivity : ComponentActivity() {
                         BackHandler { showUsers = false }
                         UsersScreen(state, vm, onBack = { showUsers = false })
                     }
-                    else -> HomeScreen(state, vm, onSettings = { showSettings = true }, onUsers = { showUsers = true })
+                    showTerminal && state.isAdmin -> {
+                        // Uscendo dalla schermata si chiude anche la shell sul PC
+                        val close = { vm.closeTerminal(); showTerminal = false }
+                        BackHandler { close() }
+                        TerminalScreen(state, vm, onBack = close)
+                    }
+                    else -> HomeScreen(state, vm, onSettings = { showSettings = true }, onUsers = { showUsers = true }, onTerminal = { showTerminal = true })
                 }
             }
         }

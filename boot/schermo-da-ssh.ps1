@@ -4,7 +4,7 @@
   e stampa qui il risultato. Funziona se lo stesso utente dell'ssh ha fatto l'accesso al PC
   (anche con il monitor nero). Non servono i permessi di amministratore.
 
-  Uso (da ssh, nella cartella del progetto):
+  Uso (da ssh, in PowerShell, nella cartella del progetto):
     powershell -ExecutionPolicy Bypass -File boot\schermo-da-ssh.ps1 -Elenco   (mostra gli schermi, non cambia niente)
     powershell -ExecutionPolicy Bypass -File boot\schermo-da-ssh.ps1           (riporta l'immagine sul monitor)
 #>
@@ -22,9 +22,10 @@ if (-not $consoleUser) {
   Write-Output 'Nessuno ha fatto l''accesso al PC: non c''è uno schermo da cambiare.'
   exit 1
 }
-$consoleUser = ($consoleUser -split '\\')[-1]
-if ($consoleUser -ne $env:USERNAME) {
-  Write-Output "Al PC ha fatto l'accesso $consoleUser, non $env:USERNAME: entra in ssh con quell'utente."
+# Nome completo dell'account (es. LATEREYES-PC\andre): in ssh $env:USERDOMAIN può non essere quello giusto
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+if ($consoleUser -ne $me -and ($consoleUser -split '\\')[-1] -ne ($me -split '\\')[-1]) {
+  Write-Output "Al PC ha fatto l'accesso $consoleUser, non $($me): entra in ssh con quell'utente."
   exit 1
 }
 
@@ -38,7 +39,7 @@ $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
 Remove-Item $out -ErrorAction SilentlyContinue
 $action = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $here `
   -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$cmd`""
-$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+$principal = New-ScheduledTaskPrincipal -UserId $consoleUser -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Force | Out-Null
 try {
   Start-ScheduledTask -TaskName $name

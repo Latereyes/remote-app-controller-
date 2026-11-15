@@ -154,6 +154,14 @@ Lo schermo virtuale si riconosce dalla scheda video "finta" (non PCI/USB) o dal 
 powershell -ExecutionPolicy Bypass -File schermo-pc.ps1 -Elenco
 ```
 
+**Da ssh** lo script da solo non basta: la sessione ssh non ha lo schermo del PC. `schermo-da-ssh.ps1` lo esegue nella sessione di chi ha fatto l'accesso al PC (deve essere lo stesso utente dell'ssh) e stampa il risultato:
+
+```bat
+cd C:\AI\remote-app-controller
+powershell -ExecutionPolicy Bypass -File boot\schermo-da-ssh.ps1 -Elenco
+powershell -ExecutionPolicy Bypass -File boot\schermo-da-ssh.ps1
+```
+
 Se non c'è un monitor vero collegato (o è spento e Windows non lo vede) non cambia niente. Se il cambio diretto non riesce, mette gli schermi in *Duplica*, così il monitor mostra comunque l'immagine. Il registro è in `boot/boot.log`.
 
 Consigliato anche in Sunshine (*Applicazioni* → *Desktop* → *Comandi*): come comando di **annullamento** `powershell -ExecutionPolicy Bypass -File C:\AI\remote-app-controller\boot\schermo-pc.ps1`, così il monitor torna acceso appena si esce dalla sessione con *Esci* in Moonlight. Se Sunshine accende lo schermo virtuale con un comando di preparazione, lo streaming continua a funzionare come prima; se invece contava sul fatto che Windows restasse sullo schermo virtuale, dopo questa modifica lo streaming mostra il monitor vero.
